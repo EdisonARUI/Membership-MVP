@@ -10,6 +10,15 @@ export function useUser() {
   
   useEffect(() => {
     const fetchUser = async () => {
+      // 先从存储中检查会话
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData?.session?.user) {
+        setUser(sessionData.session.user);
+        setIsLoading(false);
+        return;
+      }
+      
+      // 再尝试获取用户
       const { data, error } = await supabase.auth.getUser();
       if (!error && data.user) {
         setUser(data.user);
