@@ -53,7 +53,7 @@ export const signInAction = async (formData: FormData) => {
     return encodedRedirect("error", "/sign-in", error.message);
   }
 
-  return redirect("/protected");
+  return redirect("/");
 };
 
 export const forgotPasswordAction = async (formData: FormData) => {
@@ -159,18 +159,16 @@ export const signOutAction = async () => {
 export async function saveUserWithWalletAddress(userId: string, walletAddress: string) {
   const supabase = await createClient();
   
-  // 创建或更新用户的钱包信息
   const { error } = await supabase
     .from('user_wallets')
-    .upsert({
+    .insert({
       user_id: userId,
       wallet_address: walletAddress,
-      wallet_type: 'zklogin',
-      created_at: new Date().toISOString()
+      wallet_type: 'zklogin'
     });
-
+    
   if (error) {
-    console.error('保存钱包地址失败:', error);
+    console.error("保存钱包地址失败:", error);
     throw error;
   }
   
