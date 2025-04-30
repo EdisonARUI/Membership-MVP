@@ -1,35 +1,36 @@
 import { createClient } from "@/utils/supabase/server";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   // The `/auth/callback` route is required for the server-side auth flow implemented
   // by the SSR package. It exchanges an auth code for the user's session.
   // https://supabase.com/docs/guides/auth/server-side/nextjs
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
-  const origin = requestUrl.origin;
-  const redirectTo = requestUrl.searchParams.get("redirect_to")?.toString();
+  const redirectTo = requestUrl.searchParams.get("redirect") || "/";
 
   if (code) {
     const supabase = await createClient();
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     
-    if (!error && data.session) {
-      // 检查是否有OAuth提供商的访问令牌
-      if (data.session.provider_token) {
-        // 获取用户信息，包括Google JWT
-        const jwt = data.session.provider_token;
-        
-        // 重定向到个人资料页面，并附加JWT
-        return NextResponse.redirect(`${origin}/profile?jwt=${jwt}`);
-      }
+    // 交换 code 获取 session
+    const { data: { session }, error } = await supabase.auth.exchangeCodeForSession(code);
+    
+    if (error) {
+      console.error("授权错误:", error);
+      return NextResponse.redirect(new URL("/?error=auth_failed", requestUrl.origin));
+    }
+
+    // 优先返回 id_token（JWT），否则用 provider_token
+    const jwt = (session as any)?.id_token || session?.provider_token;
+    if (jwt) {
+      // 重定向回原始页面，并带上 JWT
+      return NextResponse.redirect(
+        new URL(`${redirectTo}?jwt=${jwt}`, requestUrl.origin)
+      );
     }
   }
 
-  if (redirectTo) {
-    return NextResponse.redirect(`${origin}${redirectTo}`);
-  }
-
-  // 默认重定向到个人资料页面
-  return NextResponse.redirect(`${origin}/profile`);
+  // 如果没有 code 或 session，重定向到首页
+  return NextResponse.redirect(new URL("/", requestUrl.origin));
 }
+
