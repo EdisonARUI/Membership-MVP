@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useUser } from '@/hooks/use-user';
-import { useZkLogin } from '@/hooks/useZkLogin';
+import { useZkLogin as useZkLoginHook } from '@/hooks/useZkLogin';
+import { useZkLogin } from '@/contexts/ZkLoginContext';
 import { useLog } from '@/hooks/useLog';
 import { createClient } from '@/utils/supabase/client';
 
@@ -19,42 +20,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { user, isLoading } = useUser();
   const { addLog } = useLog();
   const supabase = createClient();
+  
+  // 使用 ZkLoginContext 中的 useZkLogin
   const {
-    zkLoginMethods,
-    zkLoginInitialized,
-    clearZkLoginState
+    zkLoginAddress,
+    isInitialized,
+    clearZkLoginState,
+    handleGoogleAuth: zkLoginGoogleAuth
   } = useZkLogin();
 
-  const [zkLoginAddress, setZkLoginAddress] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const address = localStorage.getItem('zkLogin_address');
-      setZkLoginAddress(address);
-    }
-  }, []);
-
   const handleGoogleAuth = async () => {
-    if (zkLoginMethods && (zkLoginMethods.initiateLogin || zkLoginMethods.handleGoogleAuth)) {
-      try {
-        if (typeof window !== 'undefined') {
-          sessionStorage.removeItem('has_checked_jwt');
-          sessionStorage.removeItem('jwt_already_processed');
-          sessionStorage.setItem('login_initiated', 'true');
-        }
-        
-        addLog("开始Google授权流程...");
-        
-        if (zkLoginMethods.handleGoogleAuth) {
-          await zkLoginMethods.handleGoogleAuth();
-        } else if (zkLoginMethods.initiateLogin) {
-          await zkLoginMethods.initiateLogin();
-        }
-      } catch (err: any) {
-        addLog(`Google授权异常: ${err.message}`);
+    try {
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('has_checked_jwt');
+        sessionStorage.removeItem('jwt_already_processed');
+        sessionStorage.setItem('login_initiated', 'true');
       }
-    } else {
-      addLog("ZkLogin组件尚未准备就绪");
+      
+      addLog("开始Google授权流程...");
+      await zkLoginGoogleAuth();
+    } catch (err: any) {
+      addLog(`Google授权异常: ${err.message}`);
     }
   };
 
