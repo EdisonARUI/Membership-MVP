@@ -8,6 +8,8 @@ interface SubscriptionManagementDialogProps {
   onClose: () => void;
   activeSubscription: any;
   onSubscriptionUpdate: () => void;
+  onToggleAutoRenew: (subscriptionId: string, currentAutoRenew: boolean) => Promise<boolean>;
+  onCancelSubscription: (subscriptionId: string) => Promise<boolean>;
 }
 
 export function SubscriptionManagementDialog({
@@ -15,6 +17,8 @@ export function SubscriptionManagementDialog({
   onClose,
   activeSubscription,
   onSubscriptionUpdate,
+  onToggleAutoRenew,
+  onCancelSubscription,
 }: SubscriptionManagementDialogProps) {
   const [loadingAction, setLoadingAction] = useState(false);
   const [showConfirmCancel, setShowConfirmCancel] = useState(false);
@@ -23,23 +27,15 @@ export function SubscriptionManagementDialog({
 
   if (!isOpen) return null;
 
-  const toggleAutoRenew = async () => {
+  const handleToggleAutoRenew = async () => {
     if (!activeSubscription) return;
     
     try {
       setLoadingAction(true);
-      
-      const { error } = await supabase
-        .from('user_subscriptions')
-        .update({
-          auto_renew: !activeSubscription.auto_renew
-        })
-        .eq('id', activeSubscription.id);
-      
-      if (error) throw error;
-      
-      onSubscriptionUpdate();
-      addLog(activeSubscription.auto_renew ? "已关闭自动续订" : "已开启自动续订");
+      const success = await onToggleAutoRenew(activeSubscription.id, activeSubscription.auto_renew);
+      if (success) {
+        onSubscriptionUpdate();
+      }
     } catch (error: any) {
       console.error('更新订阅失败:', error);
       addLog(`操作失败: ${error.message || "更新订阅时发生错误"}`);
@@ -48,26 +44,17 @@ export function SubscriptionManagementDialog({
     }
   };
 
-  const cancelSubscription = async () => {
+  const handleCancelSubscription = async () => {
     if (!activeSubscription) return;
     
     try {
       setLoadingAction(true);
-      
-      const { error } = await supabase
-        .from('user_subscriptions')
-        .update({
-          status: 'canceled',
-          auto_renew: false
-        })
-        .eq('id', activeSubscription.id);
-      
-      if (error) throw error;
-      
-      onSubscriptionUpdate();
-      addLog("订阅已取消");
-      setShowConfirmCancel(false);
-      onClose();
+      const success = await onCancelSubscription(activeSubscription.id);
+      if (success) {
+        onSubscriptionUpdate();
+        setShowConfirmCancel(false);
+        onClose();
+      }
     } catch (error: any) {
       console.error('取消订阅失败:', error);
       addLog(`操作失败: ${error.message || "取消订阅时发生错误"}`);
@@ -106,7 +93,7 @@ export function SubscriptionManagementDialog({
                 </p>
               </div>
               <button
-                onClick={toggleAutoRenew}
+                onClick={handleToggleAutoRenew}
                 disabled={loadingAction}
                 className={`px-4 py-2 rounded-lg flex items-center space-x-2 ${
                   activeSubscription?.auto_renew
@@ -148,7 +135,7 @@ export function SubscriptionManagementDialog({
                 返回
               </button>
               <button
-                onClick={cancelSubscription}
+                onClick={handleCancelSubscription}
                 disabled={loadingAction}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white"
               >
