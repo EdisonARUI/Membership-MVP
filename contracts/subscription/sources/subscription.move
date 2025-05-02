@@ -7,6 +7,7 @@ module subscription::subscription {
     use sui::event::emit;
     use sui::clock::{Self, Clock};
     use std::option::{Self, Option};
+    use authentication::authentication::{Self, AuthRegistry, check_authorization};
 
     // 错误码
     const EInsufficientPayment: u64 = 0;
@@ -60,8 +61,12 @@ module subscription::subscription {
         duration: u64,
         auto_renew: bool,
         clock: &Clock,
+        auth: &AuthRegistry,
         ctx: &mut TxContext
     ) {
+        // 验证 zkLogin 授权
+        check_authorization(auth, ctx);
+        
         let amount = coin::value(&payment);
         
         // 处理支付，这里简化处理，实际应转入项目金库
@@ -102,8 +107,12 @@ module subscription::subscription {
         subscription: &mut Subscription,
         payment: Coin<SUI>,
         clock: &Clock,
+        auth: &AuthRegistry,
         ctx: &mut TxContext
     ) {
+        // 验证 zkLogin 授权
+        check_authorization(auth, ctx);
+        
         // 确认所有权
         assert!(subscription.owner == tx_context::sender(ctx), ENotOwner);
         
@@ -138,8 +147,12 @@ module subscription::subscription {
     // 取消订阅
     public entry fun cancel_subscription(
         subscription: &mut Subscription,
+        auth: &AuthRegistry,
         ctx: &mut TxContext
     ) {
+        // 验证 zkLogin 授权
+        check_authorization(auth, ctx);
+        
         // 确认所有权
         assert!(subscription.owner == tx_context::sender(ctx), ENotOwner);
         
