@@ -15,6 +15,10 @@ import { useSuiPrice } from "@/hooks/useSuiPrice";
 import { RechargeDialog } from "@/components/wallet/RechargeDialog";
 import { PlanCard } from "@/components/subscription/PlanCard";
 import { LogDisplay } from "@/components/debug/LogDisplay";
+import { Header } from "@/components/layout/Header";
+import { SubscriptionPlans } from "@/components/subscription/SubscriptionPlans";
+import { SubscriptionManagementDialog } from "@/components/subscription/SubscriptionManagementDialog";
+import { PaymentDialog } from "@/components/payment/PaymentDialog";
 
 const FULLNODE_URL = 'https://fullnode.devnet.sui.io';
 const suiClient = new SuiClient({ url: FULLNODE_URL });
@@ -614,197 +618,37 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
-      <header className="w-full py-4 px-8 border-b border-slate-700">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2 text-xl font-bold">
-            <Sparkles className="h-6 w-6 text-yellow-400" />
-            <span>会员订阅</span>
-          </Link>
-          <div className="flex items-center space-x-4">
-            <button 
-              onClick={() => setShowRechargeDialog(true)}
-              className="px-4 py-2 text-white hover:text-yellow-400 transition-colors flex items-center"
-            >
-              <Wallet className="h-4 w-4 mr-1" />
-              充值
-            </button>
-            
-            {user ? (
-              <>
-                <button 
-                  onClick={() => setShowSubscriptionManagement(true)}
-                  className="px-4 py-2 text-white hover:text-yellow-400 transition-colors"
-                >
-                  我的订阅
-                </button>
-                
-                <button 
-                  onClick={() => {
-                    addLog("开始退出登录...");
-                    if (typeof window !== 'undefined') {
-                      localStorage.setItem('zklogin_logs', JSON.stringify(logs));
-                      sessionStorage.removeItem('has_checked_jwt');
-                      sessionStorage.removeItem('jwt_already_processed');
-                    }
-                    
-                    supabase.auth.signOut().then(({ error }) => {
-                      if (error) {
-                        console.error("退出登录失败:", error);
-                        addLog(`退出登录失败: ${error}`);
-                        return;
-                      }
-                      
-                      localStorage.removeItem('zkLogin_ephemeral');
-                      localStorage.removeItem('zkLogin_address');
-                      localStorage.removeItem('zkLogin_proof');
-                      localStorage.removeItem('zkLogin_signature');
-                      
-                      addLog("已成功退出登录");
-                      
-                      setTimeout(() => {
-                        window.location.reload();
-                      }, 100);
-                    }).catch(err => {
-                      console.error("退出登录失败:", err);
-                      addLog(`退出登录失败: ${err}`);
-                    });
-                  }} 
-                  className="px-4 py-2 text-red-400 hover:text-red-300 transition-colors"
-                >
-                  退出
-                </button>
-                
-                <div className="relative" ref={userMenuRef}>
-                  <button 
-                    onClick={() => setShowUserMenu(!showUserMenu)}
-                    className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center overflow-hidden border border-slate-600 hover:border-yellow-400 transition-colors"
-                  >
-                    {user.user_metadata?.avatar_url ? (
-                      <img 
-                        src={user.user_metadata.avatar_url} 
-                        alt={user.user_metadata?.full_name || "用户头像"} 
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <span className="text-lg font-bold text-white">
-                        {(user.email || "U").charAt(0).toUpperCase()}
-                      </span>
-                    )}
-                  </button>
-                  
-                  {showUserMenu && (
-                    <div className="absolute right-0 mt-2 w-48 bg-slate-800 rounded-lg py-2 shadow-xl border border-slate-700 z-50">
-                      <div className="px-4 py-2 border-b border-slate-700">
-                        <p className="text-sm font-medium text-white truncate">
-                          {user.user_metadata?.full_name || user.email}
-                        </p>
-                        <p className="text-xs text-slate-400 truncate">
-                          {user.email}
-                        </p>
-                      </div>
-                      
-                      <Link 
-                        href="/profile"
-                        className="block px-4 py-2 text-sm text-white hover:bg-slate-700 transition-colors"
-                      >
-                        个人中心
-                      </Link>
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : (
-              <>
-                <button 
-                  onClick={handleGoogleAuth}
-                  className="px-4 py-2 text-white hover:text-yellow-400 transition-colors flex items-center space-x-2"
-                >
-                  <svg 
-                    xmlns="http://www.w3.org/2000/svg" 
-                    viewBox="0 0 24 24" 
-                    width="20" 
-                    height="20" 
-                    className="h-5 w-5"
-                  >
-                    <path 
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" 
-                      fill="#4285F4" 
-                    />
-                    <path 
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" 
-                      fill="#34A853" 
-                    />
-                    <path 
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" 
-                      fill="#FBBC05" 
-                    />
-                    <path 
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" 
-                      fill="#EA4335" 
-                    />
-                  </svg>
-                  <span>Continue with Google</span>
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      </header>
+      <Header 
+        onRechargeClick={() => setShowRechargeDialog(true)}
+        onSubscriptionManagementClick={() => setShowSubscriptionManagement(true)}
+      />
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
-        <LogDisplay logs={logs} onClearLogs={clearLogs} />
-        
-        <div className="text-center mb-20">
-          <div className="flex items-center justify-center mb-4">
-            <Sparkles className="h-8 w-8 text-yellow-400 mr-2" />
-            <h1 className="text-4xl font-bold">选择您的完美套餐</h1>
-          </div>
-          <p className="text-slate-400 text-lg mt-4 max-w-2xl mx-auto">
-            解锁高级功能，通过我们灵活的订阅计划将您的体验提升到新的水平。
-          </p>
-          {activeSubscription && (
-            <div className="mt-8 inline-block px-6 py-2 bg-green-600 rounded-full">
-              <span className="text-white font-medium flex items-center">
-                <Check className="h-5 w-5 mr-2" />
-                您当前已订阅 {activeSubscription.plan_name} 计划
-              </span>
-            </div>
-          )}
-        </div>
+      <LogDisplay logs={logs} onClearLogs={clearLogs} />
+      
+      <SubscriptionPlans
+        plans={plans}
+        activeSubscription={activeSubscription}
+        onSubscribe={handleSubscribeClick}
+      />
 
-        <div className="grid md:grid-cols-3 gap-8">
-          {plans.map((plan, index) => (
-            <PlanCard
-              key={plan.name}
-              plan={plan}
-              isHovered={hoveredPlan === index}
-              onMouseEnter={() => setHoveredPlan(index)}
-              onMouseLeave={() => setHoveredPlan(null)}
-              onSubscribe={() => handleSubscribeClick(plan)}
-              isActive={!!activeSubscription}
-            />
-          ))}
-        </div>
-
-        {/* 修改 zkLogin 组件部分 */}
-        <div className="mt-12 p-6 bg-slate-800 rounded-lg" style={{visibility: 'hidden', height: 0, overflow: 'hidden'}}>
-          <h2 className="text-xl font-bold mb-4">Sui 钱包</h2>
-          <div id="zk-login-instance">
-            <ZkLoginProvider 
-              userId={user?.id} 
-              autoInitialize={true} 
-              onLog={(message) => {
-                window.postMessage({ type: 'ZK_LOG', data: message }, window.location.origin);
-              }}
-              onReady={(methods) => {
-                if (!zkLoginMethods.current) {
-                  zkLoginMethods.current = methods;
-                  setZkLoginInitialized(true);
-                  addLog("ZkLogin组件已准备就绪");
-                }
-              }}
-            />
-          </div>
+      {/* zkLogin 组件 */}
+      <div className="mt-12 p-6 bg-slate-800 rounded-lg" style={{visibility: 'hidden', height: 0, overflow: 'hidden'}}>
+        <h2 className="text-xl font-bold mb-4">Sui 钱包</h2>
+        <div id="zk-login-instance">
+          <ZkLoginProvider 
+            userId={user?.id} 
+            autoInitialize={true} 
+            onLog={(message) => {
+              window.postMessage({ type: 'ZK_LOG', data: message }, window.location.origin);
+            }}
+            onReady={(methods) => {
+              if (!zkLoginMethods.current) {
+                zkLoginMethods.current = methods;
+                setZkLoginInitialized(true);
+                addLog("ZkLogin组件已准备就绪");
+              }
+            }}
+          />
         </div>
       </div>
 
@@ -818,8 +662,21 @@ export default function Home() {
         onRecharge={handleRechargeWrapper}
       />
 
-      {/* 其他对话框组件保持不变 */}
-      {/* ... */}
+      {/* 订阅管理对话框 */}
+      <SubscriptionManagementDialog
+        isOpen={showSubscriptionManagement}
+        onClose={() => setShowSubscriptionManagement(false)}
+        activeSubscription={activeSubscription}
+        onSubscriptionUpdate={fetchUserSubscriptions}
+      />
+
+      {/* 支付对话框 */}
+      <PaymentDialog
+        isOpen={showPaymentDialog}
+        onClose={() => setShowPaymentDialog(false)}
+        selectedPlan={selectedPlan}
+        onPaymentConfirm={handlePaymentConfirm}
+      />
     </div>
   );
 }
