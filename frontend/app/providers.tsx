@@ -4,6 +4,7 @@ import { ReactNode } from 'react';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { SubscriptionProvider } from '@/contexts/SubscriptionContext';
 import { PaymentProvider } from '@/contexts/PaymentContext';
+import { ZkLoginProvider } from '@/contexts/ZkLoginContext';
 
 interface ProvidersProps {
   children: ReactNode;
@@ -11,12 +12,14 @@ interface ProvidersProps {
 
 export function Providers({ children }: ProvidersProps) {
   return (
-    <AuthProvider>
-      <SubscriptionProvider>
-        <PaymentProvider>
-          {children}
-        </PaymentProvider>
-      </SubscriptionProvider>
-    </AuthProvider>
+    <ZkLoginProvider>
+      <AuthProvider>
+        <SubscriptionProvider>
+          <PaymentProvider>
+            {children}
+          </PaymentProvider>
+        </SubscriptionProvider>
+      </AuthProvider>
+    </ZkLoginProvider>
   );
 } 
