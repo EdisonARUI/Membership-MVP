@@ -4,6 +4,7 @@ import { Sparkles, Wallet, User, LogOut } from "lucide-react";
 import { useUser } from "@/hooks/use-user";
 import { createClient } from "@/utils/supabase/client";
 import { useLog } from "@/hooks/useLog";
+import { useZkLogin } from "@/contexts/ZkLoginContext";
 
 interface HeaderProps {
   onRechargeClick: () => void;
@@ -16,6 +17,17 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
   const userMenuRef = useRef<HTMLDivElement>(null);
   const { addLog } = useLog();
   const supabase = createClient();
+  const { handleGoogleAuth, zkLoginAddress, loading } = useZkLogin();
+
+  const handleZkLogin = async () => {
+    try {
+      addLog("开始zkLogin流程...");
+      await handleGoogleAuth();
+    } catch (error: any) {
+      console.error("zkLogin失败:", error);
+      addLog(`zkLogin失败: ${error.message}`);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -113,12 +125,21 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
               </div>
             </>
           ) : (
-            <Link 
-              href="/sign-in"
-              className="px-4 py-2 bg-yellow-400 hover:bg-yellow-500 text-black rounded-lg transition-colors"
-            >
-              登录
-            </Link>
+            <>
+              <button 
+                onClick={handleZkLogin}
+                disabled={loading}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors flex items-center"
+              >
+                {loading ? "处理中..." : "zkLogin"}
+              </button>
+              <Link 
+                href="/sign-in"
+                className="px-4 py-2 bg-yellow-400 hover:bg-yellow-500 text-black rounded-lg transition-colors"
+              >
+                登录
+              </Link>
+            </>
           )}
         </div>
       </div>
