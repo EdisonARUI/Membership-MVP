@@ -9,6 +9,10 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get("code");
   const redirectTo = requestUrl.searchParams.get("redirect") || "/";
 
+  const url = new URL(request.url);
+  const hashParams = url.hash ? new URLSearchParams(url.hash.substring(1)) : null;
+  const idToken = hashParams?.get('id_token');
+
   if (code) {
     const supabase = await createClient();
     
@@ -21,7 +25,30 @@ export async function GET(request: NextRequest) {
     }
 
     // 优先返回 id_token（JWT），否则用 provider_token
-    const jwt = (session as any)?.id_token || session?.provider_token;
+    const id_token = session?.provider_token;
+    if (id_token) {
+      // 重定向回原始页面，并带上 JWT
+      return NextResponse.redirect(
+        new URL(`${redirectTo}?id_token=${id_token}`, requestUrl.origin)
+      );
+    }
+  }
+
+  if (idToken) {
+    const supabase = await createClient();
+    
+    // 使用ID令牌建立会话
+    const { data, error } = await supabase.auth.signInWithIdToken({
+      provider: 'google',
+      token: idToken,
+    });
+    
+    if (error) {
+      console.error("授权错误:", error);
+      return NextResponse.redirect(new URL("/?error=auth_failed", requestUrl.origin));
+    }
+
+    const jwt = (data as any)?.id_token;
     if (jwt) {
       // 重定向回原始页面，并带上 JWT
       return NextResponse.redirect(
