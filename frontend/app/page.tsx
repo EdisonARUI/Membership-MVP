@@ -9,10 +9,12 @@ import { Header } from "@/components/layout/Header";
 import { SubscriptionPlans } from "@/components/subscription/SubscriptionPlans";
 import { SubscriptionManagementDialog } from "@/components/subscription/SubscriptionManagementDialog";
 import { PaymentDialog } from "@/components/payment/PaymentDialog";
-import ZkLoginProvider from "@/components/zklogin/zklogin";
+import { ZkLoginStatus } from "@/components/zklogin/ZkLoginStatus";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscriptionContext } from "@/contexts/SubscriptionContext";
 import { usePayment } from "@/contexts/PaymentContext";
+import { ZkLoginProvider, useZkLogin } from "@/contexts/ZkLoginContext";
+import { useEffect } from "react";
 
 // 订阅计划定义
 const plans = [
@@ -58,11 +60,26 @@ export default function Home() {
     setSelectedPlan,
     handlePaymentConfirm
   } = usePayment();
-
+  
   // 使用Hooks
   const { logs, addLog, clearLogs } = useLog();
   const { showRechargeDialog, setShowRechargeDialog, handleRecharge } = useRecharge();
   const { suiPrice: currentSuiPrice, isLoadingPrice: isSuiPriceLoading } = useSuiPrice(addLog);
+  const { handleJwtReceived } = useZkLogin();
+
+  // 检查并处理可能存在的JWT
+  useEffect(() => {
+    // 检查是否有待处理的JWT
+    if (typeof window !== 'undefined') {
+      const pendingJwt = sessionStorage.getItem('pending_jwt');
+      if (pendingJwt) {
+        console.log("主页发现待处理的JWT，开始处理...");
+        handleJwtReceived(pendingJwt).catch(error => {
+          console.error("处理JWT失败:", error);
+        });
+      }
+    }
+  }, [handleJwtReceived]);
 
   // 修改handleRecharge函数以匹配RechargeDialog的期望
   const handleRechargeWrapper = async (amount: string) => {
@@ -75,61 +92,55 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
-      <Header 
-        onRechargeClick={() => setShowRechargeDialog(true)}
-        onSubscriptionManagementClick={() => setShowSubscriptionManagement(true)}
-      />
-      
-      <LogDisplay logs={logs} onClearLogs={clearLogs} />
-      
-      <SubscriptionPlans
-        plans={plans}
-        activeSubscription={activeSubscription}
-        onSubscribe={handleSubscribeClick}
-      />
+    <ZkLoginProvider userId={user?.id} onLog={addLog}>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
+        <Header 
+          onRechargeClick={() => setShowRechargeDialog(true)}
+          onSubscriptionManagementClick={() => setShowSubscriptionManagement(true)}
+        />
+        
+        <LogDisplay logs={logs} onClearLogs={clearLogs} />
+        
+        <SubscriptionPlans
+          plans={plans}
+          activeSubscription={activeSubscription}
+          onSubscribe={handleSubscribeClick}
+        />
 
-      {/* zkLogin 组件 */}
-      <div className="mt-12 p-6 bg-slate-800 rounded-lg" style={{visibility: 'hidden', height: 0, overflow: 'hidden'}}>
-        <h2 className="text-xl font-bold mb-4">Sui 钱包</h2>
-        <div id="zk-login-instance">
-          <ZkLoginProvider 
-            userId={user?.id} 
-            autoInitialize={true} 
-            onLog={(message) => {
-              window.postMessage({ type: 'ZK_LOG', data: message }, window.location.origin);
-            }}
-          />
-        </div>
+        {/* zkLogin 状态组件
+        <div className="mt-12 p-6 bg-slate-800 rounded-lg">
+          <h2 className="text-xl font-bold mb-4">Sui 钱包</h2>
+          <ZkLoginStatus />
+        </div> */}
+        
+        {/* 充值对话框 */}
+        <RechargeDialog
+          isOpen={showRechargeDialog}
+          onClose={() => setShowRechargeDialog(false)}
+          zkLoginAddress={zkLoginAddress}
+          suiPrice={currentSuiPrice}
+          isLoadingPrice={isSuiPriceLoading}
+          onRecharge={handleRechargeWrapper}
+        />
+
+        {/* 订阅管理对话框 */}
+        <SubscriptionManagementDialog
+          isOpen={showSubscriptionManagement}
+          onClose={() => setShowSubscriptionManagement(false)}
+          activeSubscription={activeSubscription}
+          onSubscriptionUpdate={() => {}}
+          onToggleAutoRenew={handleToggleAutoRenew}
+          onCancelSubscription={handleCancelSubscription}
+        />
+
+        {/* 支付对话框 */}
+        <PaymentDialog
+          isOpen={showPaymentDialog}
+          onClose={() => setShowPaymentDialog(false)}
+          selectedPlan={selectedPlan}
+          onPaymentConfirm={handlePaymentConfirm}
+        />
       </div>
-
-      {/* 充值对话框 */}
-      <RechargeDialog
-        isOpen={showRechargeDialog}
-        onClose={() => setShowRechargeDialog(false)}
-        zkLoginAddress={zkLoginAddress}
-        suiPrice={currentSuiPrice}
-        isLoadingPrice={isSuiPriceLoading}
-        onRecharge={handleRechargeWrapper}
-      />
-
-      {/* 订阅管理对话框 */}
-      <SubscriptionManagementDialog
-        isOpen={showSubscriptionManagement}
-        onClose={() => setShowSubscriptionManagement(false)}
-        activeSubscription={activeSubscription}
-        onSubscriptionUpdate={() => {}}
-        onToggleAutoRenew={handleToggleAutoRenew}
-        onCancelSubscription={handleCancelSubscription}
-      />
-
-      {/* 支付对话框 */}
-      <PaymentDialog
-        isOpen={showPaymentDialog}
-        onClose={() => setShowPaymentDialog(false)}
-        selectedPlan={selectedPlan}
-        onPaymentConfirm={handlePaymentConfirm}
-      />
-    </div>
+    </ZkLoginProvider>
   );
 }
