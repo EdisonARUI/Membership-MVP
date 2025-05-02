@@ -40,6 +40,7 @@ interface ZkLoginProviderProps {
 }
 
 export default function ZkLoginProvider({ userId, autoInitialize = false, onLog, onReady }: ZkLoginProviderProps) {
+  const [hasMounted, setHasMounted] = useState(false);
   const [ephemeralKeypair, setEphemeralKeypair] = useState<any>(() => {
     if (typeof window !== 'undefined') {
       const savedKeypair = localStorage.getItem('zkLogin_ephemeral');
@@ -551,9 +552,15 @@ export default function ZkLoginProvider({ userId, autoInitialize = false, onLog,
     }
   }, [onReady]);
   
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+  
   return (
     <div ref={componentRef} className="mt-4">
-      {zkLoginAddress ? (
+      {!hasMounted ? (
+        <div />
+      ) : zkLoginAddress ? (
         <div className="p-4 bg-slate-700 rounded-lg text-white">
           <h3 className="text-lg font-bold">已连接到Sui Devnet</h3>
           <p className="text-sm truncate">地址: {zkLoginAddress}</p>
