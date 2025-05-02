@@ -333,18 +333,24 @@ export default function ZkLoginProvider({ userId, autoInitialize = false, onLog,
     if (!currentUserId) {
       addLog(`5.6 Props中未提供用户ID，尝试从Supabase认证系统获取...`);
       try {
-        const { data: userData, error: userError } = await supabase.auth.getUser();
-        
-        if (userError) {
-          addLog(`5.6.1 获取Supabase用户失败: ${userError.message}`);
-        } else if (userData && userData.user) {
-          currentUserId = userData.user.id;
-          addLog(`5.6.2 成功从Supabase获取用户ID: ${currentUserId.substring(0, 8)}...`);
-        } else {
-          addLog(`5.6.3 Supabase未返回用户信息，可能未登录`);
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (session) {
+          const { data: userData, error: userError } = await supabase.auth.getUser();
+          
+          if (userError) {
+            addLog(`5.6.1 获取Supabase用户失败: ${userError.message}`);
+          } else if (userData && userData.user) {
+            currentUserId = userData.user.id;
+            addLog(`5.6.2 成功从Supabase获取用户ID: ${currentUserId.substring(0, 8)}...`);
+          } else {
+            addLog(`5.6.3 Supabase未返回用户信息，可能未登录`);
+          }
+        }
+        else{
+          addLog(`5.6.4 Supabase未返回会话信息，可能未登录`);
         }
       } catch (authErr: any) {
-        addLog(`5.6.4 查询Supabase用户时出错: ${authErr.message}`);
+        addLog(`5.6.5 查询Supabase用户时出错: ${authErr.message}`);
       }
     }
     
@@ -377,7 +383,24 @@ export default function ZkLoginProvider({ userId, autoInitialize = false, onLog,
     addLog(`6.2 已保存zkLogin签名到localStorage`);
     
     addLog(`7. 【完成】zkLogin全流程执行完毕！`);
-    
+    addLog(`8. 【开始】尝试激活zkLogin地址...`);
+    try {
+      const response = await fetch('https://faucet.devnet.sui.io/v2/gas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          FixedAmountRequest: { recipient: address }
+        })
+      });
+      
+      if (response.ok) {
+        addLog(`8.1 成功发送激活请求，地址应该很快在链上可见`);
+      } else {
+        addLog(`8.2 激活请求失败，状态码: ${response.status}`);
+      }
+    } catch (err) {
+      addLog(`8.3 激活请求出错: ${err}`);
+    }
     return {
       address,
       zkLoginSignature
