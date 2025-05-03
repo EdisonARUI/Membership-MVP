@@ -90,11 +90,20 @@ export const ZkLoginStorage = {
   // Clear all zkLogin related storage
   clearAll(): void {
     if (typeof window === 'undefined') return;
+    
+    // 清除localStorage中的数据
     localStorage.removeItem('zkLogin_ephemeral');
     localStorage.removeItem('zkLogin_address');
     localStorage.removeItem('zkLogin_proof');
     localStorage.removeItem('zkLogin_signature');
+    
+    // 清除sessionStorage中的数据
     sessionStorage.removeItem('has_checked_jwt');
     sessionStorage.removeItem('jwt_already_processed');
+    sessionStorage.removeItem('pending_jwt');
+    sessionStorage.removeItem('oauth_state');
+    
+    // 确保console中显示清除过程
+    console.log("[ZkLogin Storage] 已清除所有zkLogin相关存储");
   }
 }; 

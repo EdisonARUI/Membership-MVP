@@ -9,40 +9,35 @@ export async function fetchZkProof({
   maxEpoch,
   salt,
   keyClaimName = 'sub',
-  oauthProvider = 'google'
+  oauthProvider = 'google',
+  originalNonce
 }: ZkProofParams): Promise<ZkProofResult> {
-  console.log("向Mysten Labs证明服务发送请求:", {
-    ...{
-      jwt: jwt.substring(0, 20) + "...",
+  try {
+    const requestBody: any = {
+      jwt,
       extendedEphemeralPublicKey,
       jwtRandomness,
       maxEpoch,
-      salt: salt.substring(0, 10) + "...",
+      salt,
       keyClaimName,
       oauthProvider
+    };
+    
+    // 如果提供了原始nonce，添加到请求中
+    if (originalNonce) {
+      requestBody.nonce = originalNonce;
     }
-  });
-
-  try {
+    
     const response = await fetch(PROVER_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        jwt,
-        extendedEphemeralPublicKey,
-        jwtRandomness,
-        maxEpoch,
-        salt,
-        keyClaimName,
-        oauthProvider
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`证明服务返回错误 (${response.status}): ${errorText}`);
 
       if (errorText.includes("Missing required JSON field")) {
         throw new Error(`证明服务返回错误: 缺少必需字段 - ${errorText}`);
@@ -57,14 +52,12 @@ export async function fetchZkProof({
 
     const proofData = await response.json();
     
-    // 验证返回的数据结构是否完整
     if (!proofData.proofPoints || !proofData.issBase64Details || !proofData.headerBase64) {
       throw new Error(`证明服务返回的数据结构不完整: ${Object.keys(proofData).join(", ")}`);
     }
 
     return proofData;
   } catch (error) {
-    console.error("调用证明服务失败:", error);
     throw new Error(`无法获取ZK证明: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
@@ -79,19 +72,16 @@ export function parseJwt(jwt: string): any {
     const base64Payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
     const payload = JSON.parse(atob(base64Payload));
 
-    // 验证必要字段
     if (!payload.sub || !payload.aud || !payload.iss) {
       throw new Error("JWT缺少必要的字段");
     }
 
     return payload;
   } catch (error) {
-    console.error("解析JWT失败:", error);
     throw error;
   }
 }
 
 export async function fetchUserSalt(jwt: string): Promise<string> {
-  // 目前使用默认salt，后续可以改为从后端获取
   return "0000000000000000000000000000000000000000000000000000000000000000";
 } 

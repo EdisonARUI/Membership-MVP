@@ -38,6 +38,42 @@ export const SuiService = {
     return getExtendedEphemeralPublicKey(keypair.getPublicKey());
   },
 
+  // 获取扩展公钥（从存储的keypair对象）
+  getExtendedPublicKeyFromStored(storedKeypair: any): string {
+    try {
+      // 如果传入的是完整Ed25519Keypair实例
+      if (typeof storedKeypair.getPublicKey === 'function') {
+        return getExtendedEphemeralPublicKey(storedKeypair.getPublicKey());
+      }
+      
+      // 如果传入的是存储格式的keypair对象
+      if (storedKeypair.publicKey) {
+        return getExtendedEphemeralPublicKey(storedKeypair.publicKey);
+      }
+      
+      throw new Error('无效的密钥对格式');
+    } catch (error) {
+      console.error('获取扩展公钥错误:', error);
+      throw error;
+    }
+  },
+
+  // 从存储的密钥对重新创建实际的Ed25519Keypair实例
+  recreateKeypairFromStored(storedKeypair: any): Ed25519Keypair {
+    if (!storedKeypair.secretKey) {
+      throw new Error('无效的密钥对格式：缺少secretKey字段');
+    }
+    
+    try {
+      // 参考zklogin.tsx中的实现，直接从secretKey重建密钥对
+      // 这种方法更简洁，因为Ed25519密钥对的公钥可以从私钥派生
+      return Ed25519Keypair.fromSecretKey(storedKeypair.secretKey);
+    } catch (error: any) {
+      console.error('重新创建密钥对失败:', error);
+      throw new Error(`重新创建密钥对失败: ${error.message}`);
+    }
+  },
+
   // 从JWT计算zkLogin地址
   deriveZkLoginAddress(jwt: string, userSalt: string): string {
     return jwtToAddress(jwt, userSalt);
