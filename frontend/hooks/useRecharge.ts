@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSuiPrice } from './useSuiPrice';
+import { useSuiPrice } from '@/contexts/SuiPriceContext';
 import { useLog } from './useLog';
 
 const FAUCET_URL = 'https://faucet.devnet.sui.io/v2/gas';
@@ -7,7 +7,7 @@ const FAUCET_URL = 'https://faucet.devnet.sui.io/v2/gas';
 export function useRecharge() {
   const [showRechargeDialog, setShowRechargeDialog] = useState(false);
   const { addLog } = useLog();
-  const { suiPrice, isLoadingPrice, getSuiPrice } = useSuiPrice(addLog);
+  const { suiPrice, isLoadingPrice, getSuiPrice } = useSuiPrice();
   
   const handleRecharge = async (amount: string) => {
     const zkLoginAddress = localStorage.getItem('zkLogin_address');
