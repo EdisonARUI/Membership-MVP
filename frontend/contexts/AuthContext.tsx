@@ -6,12 +6,15 @@ import { useLog } from '@/hooks/useLog';
 import { createClient } from '@/utils/supabase/client';
 import { ZkLoginStorage } from '@/utils/storage';
 import { saveUserWithWalletAddress } from '@/app/actions';
+import { contractService } from '@/utils/contractService';
+import { SuiService } from '@/utils/sui';
 
 interface AuthContextType {
   user: any;
   isLoading: boolean;
   isAuthenticated: boolean;
   zkLoginAddress: string | null;
+  onChainVerified: boolean;
   handleGoogleAuth: () => Promise<void>;
   handleLogout: () => Promise<void>;
 }
@@ -30,6 +33,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearZkLoginState,
     handleGoogleAuth: zkLoginGoogleAuth
   } = useZkLogin();
+  
+  // 新增链上认证状态
+  const [onChainVerified, setOnChainVerified] = useState(false);
+  const [checkingVerification, setCheckingVerification] = useState(false);
 
   // 监听用户登录状态变化，当检测到用户登录时尝试保存zkLogin地址
   useEffect(() => {
@@ -37,6 +44,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (user && zkLoginAddress) {
         try {
           addLog("检测到用户登录，尝试保存zkLogin地址...");
+          
+          // 检查链上认证状态
+          if (!checkingVerification && !onChainVerified) {
+            await checkOnChainVerification(zkLoginAddress);
+          }
+          
           await saveUserWithWalletAddress(user.id, zkLoginAddress);
           addLog("zkLogin地址保存成功");
         } catch (error: any) {
@@ -46,7 +59,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     saveZkLoginAddress();
-  }, [user, zkLoginAddress, addLog]);
+  }, [user, zkLoginAddress, addLog, onChainVerified, checkingVerification]);
+  
+  // 检查链上认证状态
+  const checkOnChainVerification = async (address: string) => {
+    try {
+      setCheckingVerification(true);
+      addLog("检查链上认证状态...");
+      
+      const result = await contractService.isAddressVerified(address);
+      setOnChainVerified(result.verified);
+      
+      addLog(`链上认证状态: ${result.verified ? '已认证' : '未认证'}`);
+      
+      return result.verified;
+    } catch (error: any) {
+      addLog(`检查链上认证状态失败: ${error.message}`);
+      return false;
+    } finally {
+      setCheckingVerification(false);
+    }
+  };
 
   const handleGoogleAuth = async () => {
     try {
@@ -71,12 +104,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem('zkLogin_address');
         localStorage.removeItem('zkLogin_proof');
         localStorage.removeItem('zkLogin_signature');
+        localStorage.removeItem('auth_tx_hash');
       }
       
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       
       clearZkLoginState();
+      setOnChainVerified(false);
       addLog("已成功退出登录");
       window.location.reload();
     } catch (error: any) {
@@ -90,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading,
     isAuthenticated: !!user,
     zkLoginAddress,
+    onChainVerified,
     handleGoogleAuth,
     handleLogout
   };
