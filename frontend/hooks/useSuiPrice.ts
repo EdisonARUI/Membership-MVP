@@ -1,13 +1,20 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export function useSuiPrice(logCallback?: (message: string) => void) {
   const [suiPrice, setSuiPrice] = useState<number | null>(null);
   const [isLoadingPrice, setIsLoadingPrice] = useState(false);
   
+  // 使用 useRef 存储 logCallback 以保持稳定引用
+  const logCallbackRef = useRef(logCallback);
+  
+  // 更新 ref 值
+  useEffect(() => {
+    logCallbackRef.current = logCallback;
+  }, [logCallback]);
+  
   const getSuiPrice = useCallback(async (): Promise<number> => {
     setIsLoadingPrice(true);
     try {
-      // 使用CoinGecko API获取SUI的价格
       const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=sui&vs_currencies=usd');
       if (!response.ok) {
         throw new Error(`获取价格失败: ${response.status}`);
@@ -20,24 +27,24 @@ export function useSuiPrice(logCallback?: (message: string) => void) {
         throw new Error('无法获取SUI价格数据');
       }
       
-      if (logCallback) {
-        logCallback(`获取SUI实时价格: 1 SUI = $${price} USD`);
+      if (logCallbackRef.current) {
+        logCallbackRef.current(`获取SUI实时价格: 1 SUI = $${price} USD`);
       }
       setSuiPrice(price);
       return price;
     } catch (error: any) {
       console.error('获取SUI价格失败:', error);
-      if (logCallback) {
-        logCallback(`获取SUI价格失败: ${error.message}，使用默认价格`);
+      if (logCallbackRef.current) {
+        logCallbackRef.current(`获取SUI价格失败: ${error.message}，使用默认价格`);
       }
       // 获取失败时使用默认价格
-      const defaultPrice = 0.1; // 假设1 SUI = 0.1 USD
+      const defaultPrice = 0.1;
       setSuiPrice(defaultPrice);
       return defaultPrice;
     } finally {
       setIsLoadingPrice(false);
     }
-  }, [logCallback]);
+  }, []); // 移除依赖项
   
   useEffect(() => {
     getSuiPrice();
