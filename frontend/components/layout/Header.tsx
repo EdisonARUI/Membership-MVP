@@ -1,10 +1,11 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { Sparkles, Wallet, User, LogOut } from "lucide-react";
+import { Sparkles, Wallet, User, LogOut, Gift } from "lucide-react";
 import { useUser } from "@/hooks/use-user";
 import { createClient } from "@/utils/supabase/client";
 import { useLog } from "@/hooks/useLog";
 import { useZkLogin } from "@/contexts/ZkLoginContext";
+import LotteryDialog from "../lottery/LotteryDialog";
 
 interface HeaderProps {
   onRechargeClick: () => void;
@@ -18,6 +19,7 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
   const { addLog } = useLog();
   const supabase = createClient();
   const { handleGoogleAuth, zkLoginAddress, loading } = useZkLogin();
+  const [showLotteryDialog, setShowLotteryDialog] = useState(false);
 
   const handleZkLogin = async () => {
     try {
@@ -53,6 +55,10 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
     }
   };
 
+  const handleLotteryClick = () => {
+    setShowLotteryDialog(true);
+  };
+
   return (
     <header className="w-full py-4 px-8 border-b border-slate-700">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -77,6 +83,14 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
                 className="px-4 py-2 text-white hover:text-yellow-400 transition-colors"
               >
                 我的订阅
+              </button>
+              
+              <button 
+                onClick={handleLotteryClick}
+                className="px-4 py-2 text-white hover:text-yellow-400 transition-colors flex items-center"
+              >
+                <Gift className="h-4 w-4 mr-1" />
+                抽奖
               </button>
               
               <div className="relative" ref={userMenuRef}>
@@ -146,6 +160,13 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
           )}
         </div>
       </div>
+      
+      {showLotteryDialog && (
+        <LotteryDialog 
+          isOpen={showLotteryDialog} 
+          onClose={() => setShowLotteryDialog(false)}
+        />
+      )}
     </header>
   );
 } 
