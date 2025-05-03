@@ -10,13 +10,14 @@ import { saveUserWithWalletAddress } from '@/app/actions';
 import { useLog } from '@/hooks/useLog';
 import { SuiService } from '@/utils/sui';
 import { contractService } from '@/utils/contractService';
+import { LogDisplay } from '@/components/debug/LogDisplay';
 
 export default function AuthCallback() {
   const [status, setStatus] = useState('处理登录...');
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectPath = searchParams.get('redirect') || '/';
-  const { addLog } = useLog();
+  const { logs, addLog, clearLogs } = useLog();
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -25,32 +26,40 @@ export default function AuthCallback() {
 
   // 尝试保存zkLogin地址的函数
   const trySaveZkLoginAddress = async () => {
+    console.log("=== 开始执行 trySaveZkLoginAddress ===");
+    addLog("call trySaveZkLoginAddress ");
     try {
       const zkLoginAddress = ZkLoginStorage.getZkLoginAddress();
+      console.log("获取到的zkLogin地址:", zkLoginAddress);
       if (!zkLoginAddress) {
         addLog("未找到zkLogin地址，跳过保存");
         return;
       }
 
       const { data: { user } } = await supabase.auth.getUser();
+      console.log("获取到的用户信息:", user);
       if (!user) {
         addLog("未找到用户信息，跳过保存zkLogin地址");
         return;
       }
 
       // 尝试执行链上认证
+      console.log("开始执行链上认证...");
       await registerOnChain(zkLoginAddress, user.id);
 
       addLog("尝试保存zkLogin地址到数据库...");
       await saveUserWithWalletAddress(user.id, zkLoginAddress);
       addLog("zkLogin地址保存成功");
     } catch (error: any) {
+      console.error("trySaveZkLoginAddress 执行失败:", error);
       addLog(`保存zkLogin地址失败: ${error.message}`);
     }
   };
 
   // 链上认证
   const registerOnChain = async (address: string, userId: string) => {
+    addLog("call registerOnChain ");
+
     try {
       const ephemeralKeypair = ZkLoginStorage.getEphemeralKeypair();
       if (!ephemeralKeypair) {
@@ -105,6 +114,7 @@ export default function AuthCallback() {
   };
 
   useEffect(() => {
+    addLog("call AuthCallback useEffect");
     const handleAuth = async () => {
       try {
         // 1. 检查URL hash中的id_token
@@ -180,14 +190,16 @@ export default function AuthCallback() {
   }, [router, redirectPath, addLog]);
   
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900">
-      <div className="bg-slate-800 p-8 rounded-lg shadow-xl text-white max-w-md w-full">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900">
+      <div className="bg-slate-800 p-8 rounded-lg shadow-xl text-white max-w-md w-full mb-8">
         <h1 className="text-2xl font-bold mb-4">认证处理</h1>
         <div className="flex items-center space-x-3 mb-4">
           <div className="animate-spin rounded-full h-5 w-5 border-2 border-yellow-400 border-t-transparent"></div>
           <p>{status}</p>
         </div>
       </div>
+      
+      <LogDisplay logs={logs} onClearLogs={clearLogs} />
     </div>
   );
 }
