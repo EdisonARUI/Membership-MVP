@@ -4,6 +4,8 @@ import { useZkLogin as useZkLoginHook } from '@/hooks/useZkLogin';
 import { useZkLogin } from '@/contexts/ZkLoginContext';
 import { useLog } from '@/hooks/useLog';
 import { createClient } from '@/utils/supabase/client';
+import { ZkLoginStorage } from '@/utils/storage';
+import { saveUserWithWalletAddress } from '@/app/actions';
 
 interface AuthContextType {
   user: any;
@@ -28,6 +30,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearZkLoginState,
     handleGoogleAuth: zkLoginGoogleAuth
   } = useZkLogin();
+
+  // 监听用户登录状态变化，当检测到用户登录时尝试保存zkLogin地址
+  useEffect(() => {
+    const saveZkLoginAddress = async () => {
+      if (user && zkLoginAddress) {
+        try {
+          addLog("检测到用户登录，尝试保存zkLogin地址...");
+          await saveUserWithWalletAddress(user.id, zkLoginAddress);
+          addLog("zkLogin地址保存成功");
+        } catch (error: any) {
+          addLog(`保存zkLogin地址失败: ${error.message}`);
+        }
+      }
+    };
+
+    saveZkLoginAddress();
+  }, [user, zkLoginAddress, addLog]);
 
   const handleGoogleAuth = async () => {
     try {
