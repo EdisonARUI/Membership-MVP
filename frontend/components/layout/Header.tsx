@@ -24,7 +24,6 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
       addLog("开始zkLogin流程...");
       await handleGoogleAuth();
     } catch (error: any) {
-      console.error("zkLogin失败:", error);
       addLog(`zkLogin失败: ${error.message}`);
     }
   };
@@ -37,6 +36,11 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
         localStorage.removeItem('zkLogin_address');
         localStorage.removeItem('zkLogin_proof');
         localStorage.removeItem('zkLogin_signature');
+        
+        sessionStorage.removeItem('jwt_already_processed');
+        sessionStorage.removeItem('has_checked_jwt');
+        sessionStorage.removeItem('pending_jwt');
+        sessionStorage.removeItem('oauth_state');
       }
       
       const { error } = await supabase.auth.signOut();
@@ -45,7 +49,6 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
       addLog("已成功退出登录");
       window.location.reload();
     } catch (error: any) {
-      console.error("退出登录失败:", error);
       addLog(`退出登录失败: ${error.message}`);
     }
   };
