@@ -8,6 +8,8 @@ import { jwtDecode } from 'jwt-decode';
 import { ZkLoginStorage } from '@/utils/storage';
 import { saveUserWithWalletAddress } from '@/app/actions';
 import { useLog } from '@/hooks/useLog';
+import { SuiService } from '@/utils/sui';
+import { contractService } from '@/utils/contractService';
 
 export default function AuthCallback() {
   const [status, setStatus] = useState('处理登录...');
@@ -36,11 +38,69 @@ export default function AuthCallback() {
         return;
       }
 
-      addLog("尝试保存zkLogin地址...");
+      // 尝试执行链上认证
+      await registerOnChain(zkLoginAddress, user.id);
+
+      addLog("尝试保存zkLogin地址到数据库...");
       await saveUserWithWalletAddress(user.id, zkLoginAddress);
       addLog("zkLogin地址保存成功");
     } catch (error: any) {
       addLog(`保存zkLogin地址失败: ${error.message}`);
+    }
+  };
+
+  // 链上认证
+  const registerOnChain = async (address: string, userId: string) => {
+    try {
+      const ephemeralKeypair = ZkLoginStorage.getEphemeralKeypair();
+      if (!ephemeralKeypair) {
+        addLog("找不到临时密钥对，无法完成链上认证");
+        return;
+      }
+
+      // 重建密钥对
+      const keypair = SuiService.recreateKeypairFromStored(ephemeralKeypair.keypair);
+      
+      // 检查是否已经认证
+      const verificationResult = await contractService.isAddressVerified(address);
+      if (verificationResult.verified) {
+        addLog("zkLogin地址已在链上认证，跳过认证");
+        return;
+      }
+
+      // 1. 注册zkLogin地址
+      setStatus('链上认证: 注册zkLogin地址...');
+      addLog("开始链上认证: 注册zkLogin地址...");
+      const registerResult = await contractService.registerZkLoginAddress(keypair);
+      
+      if (!registerResult.success) {
+        throw new Error(`注册zkLogin地址失败: ${registerResult.error}`);
+      }
+      
+      addLog(`zkLogin地址注册成功，交易ID: ${registerResult.txId}`);
+
+      // 2. 绑定钱包地址与用户ID
+      setStatus('链上认证: 绑定钱包地址...');
+      addLog("绑定钱包地址与用户ID...");
+      const bindResult = await contractService.bindWalletAddress(keypair, userId);
+      
+      if (!bindResult.success) {
+        throw new Error(`绑定钱包地址失败: ${bindResult.error}`);
+      }
+      
+      addLog(`钱包地址绑定成功，交易ID: ${bindResult.txId}`);
+      setStatus('链上认证完成');
+      
+      // 将交易哈希保存到本地存储，以便后续查询
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('auth_tx_hash', bindResult.txId || '');
+      }
+      
+      return true;
+    } catch (error: any) {
+      addLog(`链上认证失败: ${error.message}`);
+      setStatus(`链上认证失败: ${error.message}`);
+      return false;
     }
   };
 
@@ -73,12 +133,13 @@ export default function AuthCallback() {
             // 通过消息触发处理 - 虽然这里可能不会被接收，但作为备份机制
             window.postMessage({ type: 'JWT_RECEIVED', jwt: idToken }, window.location.origin);
             
-            setStatus('身份验证完成，正在重定向...');
+            setStatus('身份验证完成，正在处理链上认证...');
             
             // 在重定向前尝试保存zkLogin地址
             await trySaveZkLoginAddress();
             
             // 3. 重定向到指定页面
+            setStatus('认证完成，正在重定向...');
             setTimeout(() => {
               router.push(redirectPath);
             }, 500);
@@ -93,9 +154,10 @@ export default function AuthCallback() {
           }
           
           if (data.session) {
-            setStatus('已获取会话，正在重定向...');
+            setStatus('已获取会话，正在处理链上认证...');
             // 在重定向前尝试保存zkLogin地址
             await trySaveZkLoginAddress();
+            setStatus('认证完成，正在重定向...');
             router.push(redirectPath);
           } else {
             setStatus('无法获取有效的认证信息');
