@@ -60,6 +60,11 @@ export const SuiService = {
 
   // 从存储的密钥对重新创建实际的Ed25519Keypair实例
   recreateKeypairFromStored(storedKeypair: any): Ed25519Keypair {
+    console.log("开始重建密钥对，传入的storedKeypair:", {
+      ...storedKeypair,
+      secretKey: storedKeypair.secretKey ? '*** 隐藏 ***' : '未提供'
+    });
+    
     if (!storedKeypair.secretKey) {
       throw new Error('无效的密钥对格式：缺少secretKey字段');
     }
@@ -67,7 +72,9 @@ export const SuiService = {
     try {
       // 参考zklogin.tsx中的实现，直接从secretKey重建密钥对
       // 这种方法更简洁，因为Ed25519密钥对的公钥可以从私钥派生
-      return Ed25519Keypair.fromSecretKey(storedKeypair.secretKey);
+      const keypair = Ed25519Keypair.fromSecretKey(storedKeypair.secretKey);
+      console.log("密钥对重建成功，地址:", keypair.getPublicKey().toSuiAddress());
+      return keypair;
     } catch (error: any) {
       console.error('重新创建密钥对失败:', error);
       throw new Error(`重新创建密钥对失败: ${error.message}`);
