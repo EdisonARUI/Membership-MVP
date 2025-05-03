@@ -2,14 +2,28 @@ import { EphemeralKeyPair, ZkLoginSignature } from "@/components/zklogin/types";
 
 export const ZkLoginStorage = {
   // Ephemeral Keypair
-  getEphemeralKeypair(): EphemeralKeyPair | null {
+  getEphemeralKeypair(): any {
     if (typeof window === 'undefined') return null;
-    const data = localStorage.getItem('zkLogin_ephemeral');
-    if (!data) return null;
+    
     try {
-      return JSON.parse(data);
-    } catch (e) {
-      console.error('解析临时密钥对数据失败:', e);
+      const keypairStr = localStorage.getItem('zkLogin_ephemeral');
+      if (!keypairStr) {
+        console.log('找不到存储的临时密钥对');
+        return null;
+      }
+      
+      const keypair = JSON.parse(keypairStr);
+      console.log('获取到的临时密钥对:', {
+        ...keypair,
+        keypair: {
+          ...keypair.keypair,
+          secretKey: '*** 隐藏 ***'
+        }
+      });
+      
+      return keypair;
+    } catch (error) {
+      console.error('获取临时密钥对时出错:', error);
       return null;
     }
   },
