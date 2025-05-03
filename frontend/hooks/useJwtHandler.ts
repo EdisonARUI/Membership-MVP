@@ -3,6 +3,7 @@ import { parseJwt, fetchUserSalt, fetchZkProof } from '@/utils/zkProof';
 import { SuiService } from '@/utils/sui';
 import { ZkLoginStorage } from '@/utils/storage';
 import { ZkProofResult } from '@/components/zklogin/types';
+import { getExtendedEphemeralPublicKey } from '@mysten/sui/zklogin';
 
 interface UseJwtHandlerProps {
   onLog?: (message: string) => void;
@@ -17,7 +18,6 @@ export function useJwtHandler({ onLog, onAddressGenerated }: UseJwtHandlerProps 
   );
   
   const log = (message: string) => {
-    console.log(message);
     if (onLog) {
       onLog(message);
     }
@@ -25,6 +25,10 @@ export function useJwtHandler({ onLog, onAddressGenerated }: UseJwtHandlerProps 
 
   // 处理JWT核心逻辑
   const handleJwtReceived = async (jwt: string): Promise<boolean> => {
+    // 添加调试日志
+    const currentProcessedState = ZkLoginStorage.getJwtProcessed();
+    log(`JWT处理开始，当前处理状态: ${currentProcessedState ? '已处理' : '未处理'}`);
+    
     if (jwtProcessed) {
       log("JWT已经处理过，跳过");
       return true;
@@ -57,18 +61,55 @@ export function useJwtHandler({ onLog, onAddressGenerated }: UseJwtHandlerProps 
       log(`计算zkLogin地址成功: ${address}`);
 
       // 4. 获取扩展的临时公钥
-      const extendedEphemeralPublicKey = SuiService.getExtendedPublicKey(ephemeralKeypair.keypair as any);
+      const recreatedKeypair = SuiService.recreateKeypairFromStored(ephemeralKeypair.keypair);
+      const extendedEphemeralPublicKey = getExtendedEphemeralPublicKey(recreatedKeypair.getPublicKey());
       log(`获取扩展的临时公钥成功`);
+
+      // 获取OAuth流程中使用的原始参数
+      let originalNonce = null;
+      let originalRandomness = ephemeralKeypair.randomness;
+      let zkpMaxEpoch = ephemeralKeypair.maxEpoch;
+      
+      if (typeof window !== 'undefined') {
+        // 尝试获取保存的原始nonce
+        originalNonce = sessionStorage.getItem('zklogin_original_nonce');
+        
+        // 尝试获取保存的原始randomness
+        const savedRandomness = sessionStorage.getItem('zklogin_original_randomness');
+        if (savedRandomness) {
+          try {
+            originalRandomness = JSON.parse(savedRandomness);
+            log(`使用OAuth流程中的原始randomness`);
+          } catch (e) {
+            log(`解析原始randomness失败: ${e instanceof Error ? e.message : String(e)}`);
+          }
+        }
+        
+        // 尝试获取保存的原始maxEpoch
+        const savedMaxEpoch = sessionStorage.getItem('zklogin_original_maxEpoch');
+        if (savedMaxEpoch) {
+          zkpMaxEpoch = parseInt(savedMaxEpoch, 10);
+          log(`使用OAuth流程中的原始maxEpoch: ${zkpMaxEpoch}`);
+        }
+      }
+      
+      // 记录nonce信息，帮助调试
+      if (originalNonce) {
+        log(`使用OAuth流程中的原始nonce: ${originalNonce}`);
+      } else {
+        log(`未找到原始nonce记录`);
+      }
 
       // 5. 获取zkProof
       const proofResponse = await fetchZkProof({
         jwt,
         extendedEphemeralPublicKey,
-        jwtRandomness: ephemeralKeypair.randomness,
-        maxEpoch: ephemeralKeypair.maxEpoch,
+        jwtRandomness: originalRandomness,
+        maxEpoch: zkpMaxEpoch,
         salt: userSalt,
         keyClaimName: 'sub',
-        oauthProvider: 'google'
+        oauthProvider: 'google',
+        originalNonce: originalNonce || undefined // 添加原始nonce作为可选参数
       });
 
       // 6. 保存地址和证明
