@@ -32,6 +32,7 @@ export interface ZkProofParams {
   salt: string;
   keyClaimName: string;
   oauthProvider: string;
+  originalNonce?: string;
 }
 
 export interface ZkProofResult {
