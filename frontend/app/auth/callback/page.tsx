@@ -5,17 +5,44 @@ import { createClient } from '@/utils/supabase/client';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { jwtDecode } from 'jwt-decode';
+import { ZkLoginStorage } from '@/utils/storage';
+import { saveUserWithWalletAddress } from '@/app/actions';
+import { useLog } from '@/hooks/useLog';
 
 export default function AuthCallback() {
   const [status, setStatus] = useState('处理登录...');
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectPath = searchParams.get('redirect') || '/';
+  const { addLog } = useLog();
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
+
+  // 尝试保存zkLogin地址的函数
+  const trySaveZkLoginAddress = async () => {
+    try {
+      const zkLoginAddress = ZkLoginStorage.getZkLoginAddress();
+      if (!zkLoginAddress) {
+        addLog("未找到zkLogin地址，跳过保存");
+        return;
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        addLog("未找到用户信息，跳过保存zkLogin地址");
+        return;
+      }
+
+      addLog("尝试保存zkLogin地址...");
+      await saveUserWithWalletAddress(user.id, zkLoginAddress);
+      addLog("zkLogin地址保存成功");
+    } catch (error: any) {
+      addLog(`保存zkLogin地址失败: ${error.message}`);
+    }
+  };
 
   useEffect(() => {
     const handleAuth = async () => {
@@ -26,13 +53,13 @@ export default function AuthCallback() {
 
         if (idToken) {
           setStatus('已获取身份令牌，正在处理...');
-          console.log("获取到ID Token，长度:", idToken.length);
+          addLog("获取到ID Token，长度:" + idToken.length);
           
           try {
             const decoded = jwtDecode(idToken);
-            console.log("解码的Google ID Token:", decoded);
+            addLog("解码的Google ID Token:" + JSON.stringify(decoded));
           } catch (e) {
-            console.error("解码令牌失败:", e);
+            addLog("解码令牌失败:" + e);
           }
           
           // 2. 发送JWT到主应用进行处理
@@ -47,6 +74,9 @@ export default function AuthCallback() {
             window.postMessage({ type: 'JWT_RECEIVED', jwt: idToken }, window.location.origin);
             
             setStatus('身份验证完成，正在重定向...');
+            
+            // 在重定向前尝试保存zkLogin地址
+            await trySaveZkLoginAddress();
             
             // 3. 重定向到指定页面
             setTimeout(() => {
@@ -64,6 +94,8 @@ export default function AuthCallback() {
           
           if (data.session) {
             setStatus('已获取会话，正在重定向...');
+            // 在重定向前尝试保存zkLogin地址
+            await trySaveZkLoginAddress();
             router.push(redirectPath);
           } else {
             setStatus('无法获取有效的认证信息');
@@ -83,7 +115,7 @@ export default function AuthCallback() {
     };
 
     handleAuth();
-  }, [router, redirectPath]);
+  }, [router, redirectPath, addLog]);
   
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-900">
