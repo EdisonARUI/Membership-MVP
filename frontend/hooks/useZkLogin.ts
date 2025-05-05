@@ -5,6 +5,7 @@ import { ZkLoginStorage } from '@/utils/storage';
 import { SuiService } from '@/utils/sui';
 import { saveUserWithWalletAddress } from '@/app/actions';
 import { createClient } from '@/utils/supabase/client';
+import { ZkLoginService } from '@/utils/zkLoginService';
 
 export function useZkLogin(userId?: string, onLog?: (message: string) => void) {
   // 初始状态
@@ -26,7 +27,7 @@ export function useZkLogin(userId?: string, onLog?: (message: string) => void) {
     }
   };
 
-  // 初始化临时密钥对
+  // 初始化临时密钥对 - 使用服务层方法
   const initializeZkLogin = async (forceNew: boolean = false): Promise<string | null> => {
     // 如果已有临时密钥对且不强制创建新的
     if (state.ephemeralKeypair && !forceNew) {
@@ -37,16 +38,22 @@ export function useZkLogin(userId?: string, onLog?: (message: string) => void) {
     setState(prev => ({ ...prev, loading: true, error: null }));
     try {
       log("开始创建临时密钥对...");
-      const keypair = await SuiService.createEphemeralKeyPair();
-      ZkLoginStorage.setEphemeralKeypair(keypair);
+      
+      // 调用服务层方法
+      const { keypair, nonce } = await ZkLoginService.initialize(forceNew);
+      
       setState(prev => ({ 
         ...prev, 
         ephemeralKeypair: keypair,
         isInitialized: true,
         loading: false 
       }));
-      log("临时密钥对创建成功");
-      return keypair.nonce;
+      
+      log("临时密钥对创建成功: " + JSON.stringify(keypair));
+      const recreatekeypair = SuiService.recreateKeypairFromStored(keypair.keypair);
+      log("临时密钥对解析地址为: " + recreatekeypair.getPublicKey().toSuiAddress());
+
+      return nonce;
     } catch (error: any) {
       const errorMessage = `准备密钥对失败: ${error.message}`;
       log(errorMessage);
@@ -59,21 +66,16 @@ export function useZkLogin(userId?: string, onLog?: (message: string) => void) {
     }
   };
 
-  // 处理获取到的zkLogin地址
+  // 处理获取到的zkLogin地址 - 使用服务层方法
   const handleZkLoginAddress = async (address: string): Promise<void> => {
     try {
       // 保存到状态
       setState(prev => ({ ...prev, zkLoginAddress: address }));
-      ZkLoginStorage.setZkLoginAddress(address);
-      log(`zkLogin地址已保存: ${address}`);
-
-      // 激活地址
-      try {
-        await SuiService.activateAddress(address);
-        log("zkLogin地址激活请求已发送");
-      } catch (error: any) {
-        log(`激活地址失败: ${error.message}`);
-      }
+      
+      // 调用服务层方法
+      await ZkLoginService.saveAndActivateAddress(address);
+      
+      log(`zkLogin地址已保存并激活: ${address}`);
     } catch (error: any) {
       log(`处理zkLogin地址时出错: ${error.message}`);
     }
