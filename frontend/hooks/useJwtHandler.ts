@@ -1,9 +1,6 @@
 import { useState, useEffect } from 'react';
-import { parseJwt, fetchUserSalt, fetchZkProof } from '@/utils/zkProof';
-import { SuiService } from '@/utils/sui';
 import { ZkLoginStorage } from '@/utils/storage';
-import { ZkProofResult } from '@/components/zklogin/types';
-import { getExtendedEphemeralPublicKey } from '@mysten/sui/zklogin';
+import { ZkLoginService } from '@/utils/zkLoginService';
 
 interface UseJwtHandlerProps {
   onLog?: (message: string) => void;
@@ -23,7 +20,7 @@ export function useJwtHandler({ onLog, onAddressGenerated }: UseJwtHandlerProps 
     }
   };
 
-  // 处理JWT核心逻辑
+  // 处理JWT核心逻辑 - 使用服务层方法
   const handleJwtReceived = async (jwt: string): Promise<boolean> => {
     // 添加调试日志
     const currentProcessedState = ZkLoginStorage.getJwtProcessed();
@@ -34,98 +31,26 @@ export function useJwtHandler({ onLog, onAddressGenerated }: UseJwtHandlerProps 
       return true;
     }
 
-    const ephemeralKeypair = ZkLoginStorage.getEphemeralKeypair();
-    if (!ephemeralKeypair) {
-      const error = "找不到临时密钥对，请重新开始";
-      log(error);
-      setError(error);
-      return false;
-    }
-
     setProcessing(true);
     setError(null);
 
     try {
       log(`开始处理JWT，长度: ${jwt.length}`);
       
-      // 1. 解析JWT
-      const payload = parseJwt(jwt);
-      log(`JWT解析成功: sub=${payload.sub}, iss=${payload.iss}`);
-
-      // 2. 获取用户salt
-      const userSalt = await fetchUserSalt(jwt);
-      log(`获取用户salt成功: ${userSalt.substring(0, 10)}...`);
-
-      // 3. 计算zkLogin地址
-      const address = SuiService.deriveZkLoginAddress(jwt, userSalt);
-      log(`计算zkLogin地址成功: ${address}`);
-
-      // 4. 获取扩展的临时公钥
-      const recreatedKeypair = SuiService.recreateKeypairFromStored(ephemeralKeypair.keypair);
-      const extendedEphemeralPublicKey = getExtendedEphemeralPublicKey(recreatedKeypair.getPublicKey());
-      log(`获取扩展的临时公钥成功`);
-
-      // 获取OAuth流程中使用的原始参数
-      let originalNonce = null;
-      let originalRandomness = ephemeralKeypair.randomness;
-      let zkpMaxEpoch = ephemeralKeypair.maxEpoch;
+      // 调用服务层方法处理JWT
+      const result = await ZkLoginService.processJwt(jwt);
       
-      if (typeof window !== 'undefined') {
-        // 尝试获取保存的原始nonce
-        originalNonce = sessionStorage.getItem('zklogin_original_nonce');
-        
-        // 尝试获取保存的原始randomness
-        const savedRandomness = sessionStorage.getItem('zklogin_original_randomness');
-        if (savedRandomness) {
-          try {
-            originalRandomness = JSON.parse(savedRandomness);
-            log(`使用OAuth流程中的原始randomness`);
-          } catch (e) {
-            log(`解析原始randomness失败: ${e instanceof Error ? e.message : String(e)}`);
-          }
-        }
-        
-        // 尝试获取保存的原始maxEpoch
-        const savedMaxEpoch = sessionStorage.getItem('zklogin_original_maxEpoch');
-        if (savedMaxEpoch) {
-          zkpMaxEpoch = parseInt(savedMaxEpoch, 10);
-          log(`使用OAuth流程中的原始maxEpoch: ${zkpMaxEpoch}`);
-        }
-      }
+      log(`JWT处理成功，地址: ${result.zkLoginAddress}`);
       
-      // 记录nonce信息，帮助调试
-      if (originalNonce) {
-        log(`使用OAuth流程中的原始nonce: ${originalNonce}`);
-      } else {
-        log(`未找到原始nonce记录`);
-      }
-
-      // 5. 获取zkProof
-      const proofResponse = await fetchZkProof({
-        jwt,
-        extendedEphemeralPublicKey,
-        jwtRandomness: originalRandomness,
-        maxEpoch: zkpMaxEpoch,
-        salt: userSalt,
-        keyClaimName: 'sub',
-        oauthProvider: 'google',
-        originalNonce: originalNonce || undefined // 添加原始nonce作为可选参数
-      });
-
-      // 6. 保存地址和证明
-      ZkLoginStorage.setZkLoginProof(proofResponse);
-      log(`zkProof已保存`);
-      
-      // 7. 调用钩子函数处理地址
+      // 调用钩子函数处理地址
       if (onAddressGenerated) {
-        await onAddressGenerated(address);
+        await onAddressGenerated(result.zkLoginAddress);
       }
 
-      // 8. 标记JWT已处理
-      ZkLoginStorage.setJwtProcessed(true);
+      // 更新状态
       setJwtProcessed(true);
       
-      // 9. 清理sessionStorage中的pending_jwt
+      // 清理sessionStorage中的pending_jwt
       if (typeof window !== 'undefined') {
         sessionStorage.removeItem('pending_jwt');
       }
