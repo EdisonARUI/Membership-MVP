@@ -6,6 +6,7 @@ import { createClient } from "@/utils/supabase/client";
 import { useLog } from "@/hooks/useLog";
 import { useZkLogin } from "@/contexts/ZkLoginContext";
 import LotteryDialog from "../lottery/LotteryDialog";
+import { FcGoogle } from "react-icons/fc";
 
 interface HeaderProps {
   onRechargeClick: () => void;
@@ -64,7 +65,7 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         <Link href="/" className="flex items-center space-x-2 text-xl font-bold">
           <Sparkles className="h-6 w-6 text-yellow-400" />
-          <span>会员订阅</span>
+          <span>FREEHOME</span>
         </Link>
 
         <div className="flex items-center space-x-4">
@@ -143,19 +144,22 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
             </>
           ) : (
             <>
-              <button 
+              <button
                 onClick={handleZkLogin}
                 disabled={loading}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors flex items-center"
+                className="w-full max-w-sm px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition flex items-center justify-center space-x-3"
               >
-                {loading ? "处理中..." : "zkLogin"}
+                <FcGoogle size={20} />
+                <span className="text-sm font-medium text-gray-700">
+                  {loading ? "处理中..." : "Continue with Google"}
+                </span>
               </button>
-              <Link 
+              {/* <Link 
                 href="/sign-in"
                 className="px-4 py-2 bg-yellow-400 hover:bg-yellow-500 text-black rounded-lg transition-colors"
               >
                 登录
-              </Link>
+              </Link> */}
             </>
           )}
         </div>

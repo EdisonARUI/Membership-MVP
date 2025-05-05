@@ -12,7 +12,7 @@ export default async function Layout({
         <div className="max-w-7xl mx-auto flex items-center">
           <Link href="/" className="flex items-center space-x-2 text-xl font-bold">
             <Sparkles className="h-6 w-6 text-yellow-400" />
-            <span>会员订阅</span>
+            <span>FREEHOME</span>
           </Link>
         </div>
       </header>
