@@ -57,6 +57,18 @@ export const ZkLoginStorage = {
     }
   },
 
+  setDecodedJwt(decodedJwt: any): void {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('decodedJwt', JSON.stringify(decodedJwt));
+  },
+
+  getDecodedJwt(): any | null {
+    if (typeof window === 'undefined') return null;
+    const data = localStorage.getItem('decodedJwt');
+    if (!data) return null;
+    return JSON.parse(data);
+  },
+
   setZkLoginProof(proof: any): void {
     if (typeof window === 'undefined') return;
     localStorage.setItem('zkLogin_proof', JSON.stringify(proof));
