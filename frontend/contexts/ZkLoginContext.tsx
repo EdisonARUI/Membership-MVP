@@ -97,8 +97,8 @@ export function ZkLoginProvider({
       // 强制创建新的临时密钥对，解决nonce问题
       const generatedNonce = await initializeZkLogin(true);
       if (!generatedNonce) {
-        stableCallbacks.current.logMessage("无法继续：临时密钥对创建失败");
-        return;
+          stableCallbacks.current.logMessage("无法继续：临时密钥对创建失败");
+          return;
       }
 
       stableCallbacks.current.logMessage("开始 Google 授权流程...");
@@ -113,7 +113,7 @@ export function ZkLoginProvider({
       // Google OAuth 2.0 参数
       const googleOAuthEndpoint = 'https://accounts.google.com/o/oauth2/v2/auth';
       const clientId =  process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-      const redirectUri = `${window.location.origin}`;
+      const redirectUri = `${window.location.origin}/auth/callback`;
       const scope = 'openid email profile';
       const responseType = 'id_token';
       
@@ -140,18 +140,18 @@ export function ZkLoginProvider({
       oauthUrl.searchParams.append('nonce', nonce);
       oauthUrl.searchParams.append('prompt', 'consent');
       
-      // 可选：添加state参数以验证回调
-      const state = btoa(JSON.stringify({
-        redirect: window.location.pathname,
-        timestamp: Date.now()
-      }));
-      oauthUrl.searchParams.append('state', state);
+      // // 可选：添加state参数以验证回调
+      // const state = btoa(JSON.stringify({
+      //   redirect: window.location.pathname,
+      //   timestamp: Date.now()
+      // }));
+      // oauthUrl.searchParams.append('state', state);
       
-      // 在本地存储中保存状态以便回调时验证
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('oauth_state', state);
-      }
-      
+      // // 在本地存储中保存状态以便回调时验证
+      // if (typeof window !== 'undefined') {
+      //   sessionStorage.setItem('oauth_state', state);
+      // }
+
       stableCallbacks.current.logMessage("Google 授权请求已发送");
       
       // 重定向到Google授权页面
