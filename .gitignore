@@ -1,6 +1,6 @@
-/example contracts
 /docs
 /.cursor
-/membership-mvp/move
-/membership-mvp/node_modules
 /pictures
+/frontend/node_modules
+/frontend/package-lock.json
+**/deploy.md
