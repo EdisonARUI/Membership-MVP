@@ -1,27 +1,13 @@
 import { SuiClient, SuiTransactionBlockResponse } from '@mysten/sui/client';
 import { Transaction } from '@mysten/sui/transactions';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { CONTRACT_ADDRESSES } from '../config/contracts';
 
 // Sui客户端配置
 const FULLNODE_URL = 'https://fullnode.devnet.sui.io';
 export const suiClient = new SuiClient({ url: FULLNODE_URL });
 
-// 合约地址和模块ID - 请替换为实际部署的合约地址
-export const CONTRACT_ADDRESSES = {
-  AUTHENTICATION: {
-    PACKAGE_ID: '0x1168aecdd3a3eb28b570b0af6bb0ab23966ab08b7ab31e7f7c7ddf8164a29f0b', // 替换为实际部署的authentication包ID
-    MODULE_NAME: 'authentication',
-    REGISTRY_OBJECT_ID: '0x06717c46fb12546b1b1ecc32976a1b40bf8ea991f99f22364d465eab716faf44', // 替换为实际的AuthRegistry对象ID
-  },
-  SUBSCRIPTION: {
-    PACKAGE_ID: '0xcc52f1b8380ed5afe40341cfd85de3388c160c28569bac8b42dc8acdc632549d', // 替换为实际部署的subscription包ID
-    MODULE_NAME: 'subscription',
-  },
-  LOTTERY: {
-    PACKAGE_ID: '0x721afb29471a5b0c67eda9674ede2e2e1c2d3653c5c7239dffc6d87182e70254', // 替换为实际部署的lottery包ID
-    MODULE_NAME: 'lottery',
-  }
-};
+
 
 export class ContractService {
   private client: SuiClient;
@@ -33,11 +19,6 @@ export class ContractService {
   // 获取Sui客户端
   getClient(): SuiClient {
     return this.client;
-  }
-
-  // 获取AuthRegistry对象ID
-  getAuthRegistryObjectId(): string {
-    return CONTRACT_ADDRESSES.AUTHENTICATION.REGISTRY_OBJECT_ID;
   }
 
   // 注册zkLogin地址
@@ -91,7 +72,7 @@ export class ContractService {
         txb.moveCall({
           target: `${CONTRACT_ADDRESSES.AUTHENTICATION.PACKAGE_ID}::${CONTRACT_ADDRESSES.AUTHENTICATION.MODULE_NAME}::register_zk_address`,
           arguments: [
-            txb.object(this.getAuthRegistryObjectId())
+            txb.object(CONTRACT_ADDRESSES.AUTHENTICATION.REGISTRY_OBJECT_ID)
           ]
         });
       } catch (callError: any) {
@@ -204,7 +185,7 @@ export class ContractService {
         moveCallResult = txb.moveCall({
           target: `${CONTRACT_ADDRESSES.AUTHENTICATION.PACKAGE_ID}::${CONTRACT_ADDRESSES.AUTHENTICATION.MODULE_NAME}::is_address_verified`,
           arguments: [
-            txb.object(this.getAuthRegistryObjectId()),
+            txb.object(CONTRACT_ADDRESSES.AUTHENTICATION.REGISTRY_OBJECT_ID),
             txb.pure.address(address)
           ]
         });
@@ -346,7 +327,7 @@ export class ContractService {
       txb.moveCall({
         target: `${CONTRACT_ADDRESSES.AUTHENTICATION.PACKAGE_ID}::${CONTRACT_ADDRESSES.AUTHENTICATION.MODULE_NAME}::bind_wallet_address`,
         arguments: [
-          txb.object(this.getAuthRegistryObjectId()),
+          txb.object(CONTRACT_ADDRESSES.AUTHENTICATION.REGISTRY_OBJECT_ID),
           userIdArg
         ]
       });
