@@ -1,33 +1,56 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react';
-import { createClient } from '@/utils/supabase/client';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { ZkLoginState } from '@/components/zklogin/types';
+import { AppStorage } from '@/utils/storage';
 import { useZkLogin as useZkLoginHook } from '@/hooks/useZkLogin';
-import { useJwtHandler } from '@/hooks/useJwtHandler';
-import { ZkLoginStorage } from '@/utils/storage';
+import { ZkLoginService } from '@/utils/zkLoginService';
+import { ZkLoginProcessResult } from '@/interfaces/ZkLogin';
+import { useLog } from '@/hooks/useLog';
 
-// 对外暴露的Context接口
-interface ZkLoginContextType extends ZkLoginState {
-  handleGoogleAuth: () => Promise<void>;
-  handleJwtReceived: (jwt: string) => Promise<void>;
-  clearZkLoginState: () => void;
+// 新的Context接口，专注于zkLogin技术实现并包含日志功能
+interface ZkLoginContextType {
+  // 状态
+  state: ZkLoginState;
+  
+  // 方法
+  prepareZkLogin: () => Promise<string>; // 只负责准备密钥对并返回nonce
+  // processJwt: (jwt: string) => Promise<ZkLoginProcessResult>;
+  clearState: () => void;
+  
+  // 日志相关
+  logs: string[];
+  clearLogs: () => void;
 }
 
 const ZkLoginContext = createContext<ZkLoginContextType | undefined>(undefined);
 
 export function ZkLoginProvider({ 
   children,
-  userId,
-  onLog
+  userId
 }: { 
   children: ReactNode;
   userId?: string;
-  onLog?: (message: string) => void;
 }) {
-  const supabase = createClient();
-
-  // 使用拆分的hooks
+  // 使用useLog钩子获取日志功能
+  const { logs, addLog, clearLogs } = useLog();
+  
+  // 初始化时设置ZkLoginService的日志回调
+  useEffect(() => {
+    // 设置ZkLoginService的日志回调
+    ZkLoginService.setLogCallback(addLog);
+    
+    // 记录初始化日志
+    addLog("ZkLoginContext已初始化，并设置了日志回调");
+    
+    // 清理函数（如果需要）
+    return () => {
+      // 清除回调 - 使用一个空函数代替null
+      ZkLoginService.setLogCallback(() => {});
+    };
+  }, [addLog]);
+  
+  // 使用hook获取基础zkLogin功能，并传入日志回调函数
   const {
     zkLoginAddress,
     ephemeralKeypair,
@@ -36,38 +59,20 @@ export function ZkLoginProvider({
     loading: zkLoginLoading,
     jwt: zkLoginJwt,
     initializeZkLogin,
-    handleZkLoginAddress,
     clearZkLoginState,
     log
-  } = useZkLoginHook(userId, onLog);
+  } = useZkLoginHook(userId, addLog);
 
-  // 使用ref存储稳定的函数引用
-  const stableCallbacks = useRef({
-    logMessage: (message: string) => {
-      if (onLog) onLog(message);
-    },
-    handleJwtReceived: async (jwt: string) => {}
-  });
-
-  // 使用 JWT 处理钩子
-  const {
-    processing: jwtProcessing,
-    error: jwtError,
-    jwtProcessed,
-    handleJwtReceived: processJwt
-  } = useJwtHandler({
-    onLog: stableCallbacks.current.logMessage,
-    onAddressGenerated: handleZkLoginAddress
-  });
-
-  // 合并状态
+  // 合成状态
   const [state, setState] = useState<ZkLoginState>({
     zkLoginAddress,
     ephemeralKeypair,
     isInitialized,
-    error: zkLoginError || jwtError,
-    loading: zkLoginLoading || jwtProcessing,
-    jwt: zkLoginJwt
+    error: zkLoginError,
+    loading: zkLoginLoading,
+    jwt: zkLoginJwt,
+    status: zkLoginLoading ? 'initializing' : (isInitialized ? 'ready' : 'idle'),
+    partialSignature: AppStorage.getZkLoginPartialSignature()
   });
 
   // 当各子状态更新时更新总状态
@@ -76,155 +81,90 @@ export function ZkLoginProvider({
       zkLoginAddress,
       ephemeralKeypair,
       isInitialized,
-      error: zkLoginError || jwtError,
-      loading: zkLoginLoading || jwtProcessing,
-      jwt: zkLoginJwt
+      error: zkLoginError,
+      loading: zkLoginLoading,
+      jwt: zkLoginJwt,
+      status: zkLoginLoading ? 'initializing' : (isInitialized ? 'ready' : 'idle'),
+      partialSignature: AppStorage.getZkLoginPartialSignature()
     });
   }, [
     zkLoginAddress,
     ephemeralKeypair,
     isInitialized,
     zkLoginError,
-    jwtError,
     zkLoginLoading,
-    jwtProcessing,
     zkLoginJwt
   ]);
 
-  // 处理Google登录
-  const handleGoogleAuth = async () => {
+  // 准备zkLogin（创建临时密钥对）- 不包含OAuth重定向逻辑
+  const prepareZkLogin = async (): Promise<string> => {
     try {
-      // 强制创建新的临时密钥对，解决nonce问题
+      // 强制创建新的临时密钥对
       const generatedNonce = await initializeZkLogin(true);
       if (!generatedNonce) {
-          stableCallbacks.current.logMessage("无法继续：临时密钥对创建失败");
-          return;
+        addLog("无法继续：临时密钥对创建失败");
+        throw new Error("临时密钥对创建失败");
       }
 
-      stableCallbacks.current.logMessage("开始 Google 授权流程...");
-      
-      // 获取最新保存的临时密钥对数据，确保使用刚刚创建的密钥对
-      const updatedEphemeralData = ZkLoginStorage.getEphemeralKeypair();
-      if (!updatedEphemeralData) {
-        stableCallbacks.current.logMessage("无法获取最新的临时密钥对数据");
-        return;
-      }
-      
-      // Google OAuth 2.0 参数
-      const googleOAuthEndpoint = 'https://accounts.google.com/o/oauth2/v2/auth';
-      const clientId =  process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-      const redirectUri = `${window.location.origin}/auth/callback`;
-      const scope = 'openid email profile';
-      const responseType = 'id_token';
-      
-      // 使用最新创建的密钥对的nonce，而不是可能尚未更新的state中的nonce
-      const nonce = updatedEphemeralData.nonce;
-      
-      // 记录nonce和其他重要参数，帮助调试
-      stableCallbacks.current.logMessage(`使用nonce: ${nonce}`);
-      stableCallbacks.current.logMessage(`maxEpoch: ${updatedEphemeralData.maxEpoch}`);
+      addLog(`zkLogin准备完成，nonce: ${generatedNonce}`);
       
       // 保存OAuth流程中使用的原始参数，以便后续ZK证明验证使用
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('zklogin_original_nonce', nonce);
-        sessionStorage.setItem('zklogin_original_maxEpoch', updatedEphemeralData.maxEpoch.toString());
-        sessionStorage.setItem('zklogin_original_randomness', JSON.stringify(updatedEphemeralData.randomness));
+      const updatedEphemeralData = AppStorage.getEphemeralKeypair();
+      if (updatedEphemeralData) {
+        AppStorage.setZkLoginOriginalNonce(updatedEphemeralData.nonce);
+        AppStorage.setZkLoginOriginalMaxEpoch(updatedEphemeralData.maxEpoch.toString());
+        AppStorage.setZkLoginOriginalRandomness(JSON.stringify(updatedEphemeralData.randomness));
       }
       
-      // 构建OAuth URL
-      const oauthUrl = new URL(googleOAuthEndpoint);
-      oauthUrl.searchParams.append('client_id', clientId!);
-      oauthUrl.searchParams.append('redirect_uri', redirectUri);
-      oauthUrl.searchParams.append('response_type', responseType);
-      oauthUrl.searchParams.append('scope', scope);
-      oauthUrl.searchParams.append('nonce', nonce);
-      oauthUrl.searchParams.append('prompt', 'consent');
-      
-      // // 可选：添加state参数以验证回调
-      // const state = btoa(JSON.stringify({
-      //   redirect: window.location.pathname,
-      //   timestamp: Date.now()
-      // }));
-      // oauthUrl.searchParams.append('state', state);
-      
-      // // 在本地存储中保存状态以便回调时验证
-      // if (typeof window !== 'undefined') {
-      //   sessionStorage.setItem('oauth_state', state);
-      // }
-
-      stableCallbacks.current.logMessage("Google 授权请求已发送");
-      
-      // 重定向到Google授权页面
-      window.location.href = oauthUrl.toString();
+      return generatedNonce;
     } catch (err: any) {
-      stableCallbacks.current.logMessage(`Google 授权异常: ${err.message}`);
+      addLog(`准备zkLogin失败: ${err.message}`);
+      throw err;
     }
   };
 
-  // 更新稳定的回调函数引用
-  useEffect(() => {
-    stableCallbacks.current.handleJwtReceived = async (jwt: string) => {
-      stableCallbacks.current.logMessage(`接收到JWT，长度: ${jwt.length}`);
-      await processJwt(jwt);
-    };
-  }, [processJwt]);
-
-  // JWT处理封装 - 作为暴露给外部的方法
-  const handleJwtReceived = useCallback(async (jwt: string) => {
-    if (onLog) onLog("ZkLoginContext: handleJwtReceived被调用，JWT长度: " + jwt.length);
-    
-    // 直接调用processJwt而不是通过stableCallbacks
-    try {
-      // 记录接收JWT日志
-      if (onLog) onLog(`接收到JWT，长度: ${jwt.length}`);
+  // // 处理JWT - 拆分自身份验证流程
+  // const processJwt = async (jwt: string): Promise<ZkLoginProcessResult> => {
+  //   try {
+  //     addLog("开始处理JWT...");
+  //     const result = await ZkLoginService.processJwt(jwt);
+  //     addLog(`JWT处理成功，地址: ${result.zkLoginAddress}`);
+  //     await handleZkLoginAddress(result.zkLoginAddress);
+  //     return result;
+  //   } catch (error: any) {
+  //     // 提取更详细的错误信息
+  //     const errorDetails = error.responseText
+  //       ? `错误响应: ${error.responseText.substring(0, 100)}...`
+  //       : error.message;
       
-      // 直接调用processJwt处理
-      await processJwt(jwt);
-    } catch (error: any) {
-      if (onLog) onLog(`处理JWT时出错: ${error.message}`);
-    }
-  }, [onLog, processJwt]);
-
-  // 监听消息 - 使用稳定的引用避免频繁重新注册
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
+  //     addLog(`处理JWT失败: ${errorDetails}`);
       
-      if (event.data.type === 'JWT_RECEIVED') {
-        stableCallbacks.current.logMessage(`通过window消息接收到JWT`);
-        stableCallbacks.current.handleJwtReceived(event.data.jwt);
-      }
-    };
+  //     // 如果错误包含"Unexpected token '<'"，可能是API返回了HTML而非JSON
+  //     if (error.message.includes("Unexpected token '<'") || error.message.includes("<!DOCTYPE")) {
+  //       addLog("API返回了HTML而不是JSON，可能是服务器配置问题或API端点错误");
+  //     }
+      
+  //     throw error;
+  //   }
+  // };
 
-    stableCallbacks.current.logMessage("注册JWT消息监听器");
-    window.addEventListener('message', handleMessage);
-    return () => {
-      stableCallbacks.current.logMessage("移除JWT消息监听器");
-      window.removeEventListener('message', handleMessage);
-    };
-  }, []); // 移除所有依赖项，使用ref中的稳定引用
-
-  // 扩展原有的clearZkLoginState函数，确保完全清除所有zkLogin状态
-  const enhancedClearZkLoginState = () => {
-    // 调用原始清除函数
+  // 清除状态
+  const clearState = (): void => {
     clearZkLoginState();
     
     // 手动重置所有会话状态
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('jwt_already_processed');
-      sessionStorage.removeItem('has_checked_jwt');
-      sessionStorage.removeItem('pending_jwt');
-      sessionStorage.removeItem('oauth_state');
-    }
+    AppStorage.clearSessionStorage();
     
-    stableCallbacks.current.logMessage("已完全清除zkLogin状态和会话数据");
+    addLog("已完全清除zkLogin状态");
   };
 
-  const value = {
-    ...state,
-    handleGoogleAuth,
-    handleJwtReceived,
-    clearZkLoginState: enhancedClearZkLoginState // 替换为增强版的清除函数
+  const value: ZkLoginContextType = {
+    state,
+    prepareZkLogin,
+    // processJwt,
+    clearState,
+    logs,
+    clearLogs
   };
 
   return (

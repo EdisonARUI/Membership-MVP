@@ -11,12 +11,8 @@ export default function ZkLoginProvider({
   onReady 
 }: ZkLoginProviderProps) {
   const { 
-    zkLoginAddress, 
-    ephemeralKeypair, 
-    loading, 
-    error,
-    handleGoogleAuth,
-    handleJwtReceived
+    state: { zkLoginAddress, ephemeralKeypair, loading, error },
+    prepareZkLogin
   } = useZkLogin();
   
   const [hasMounted, setHasMounted] = useState(false);
@@ -28,22 +24,6 @@ export default function ZkLoginProvider({
       onLog(message);
     }
   };
-
-  // 监听JWT消息
-  useEffect(() => {
-    const handleMessage = async (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      if (event.data.type !== 'JWT_RECEIVED') return;
-      
-      const jwt = event.data.jwt;
-      if (jwt && ephemeralKeypair) {
-        await handleJwtReceived(jwt);
-      }
-    };
-    
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [ephemeralKeypair, handleJwtReceived]);
   
   // 准备onReady回调方法
   useEffect(() => {
@@ -54,14 +34,19 @@ export default function ZkLoginProvider({
         },
         handleGoogleAuth: async () => {
           addLog("开始Google授权...");
-          await handleGoogleAuth();
+          try {
+            await prepareZkLogin();
+            addLog("zkLogin密钥对已准备");
+          } catch (error: any) {
+            addLog(`准备zkLogin失败: ${error.message}`);
+          }
         }
       };
       
       onReady(methods);
       onReadyCalledRef.current = true;
     }
-  }, [handleGoogleAuth, onReady]);
+  }, [prepareZkLogin, onReady]);
   
   // 组件挂载标记
   useEffect(() => {

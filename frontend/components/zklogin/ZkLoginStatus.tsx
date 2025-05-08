@@ -3,7 +3,9 @@
 import { useZkLogin } from "@/contexts/ZkLoginContext";
 
 export function ZkLoginStatus() {
-  const { zkLoginAddress, loading, error } = useZkLogin();
+  // 从state中获取属性
+  const { state } = useZkLogin();
+  const { zkLoginAddress, loading, error } = state;
 
   if (loading) {
     return (
