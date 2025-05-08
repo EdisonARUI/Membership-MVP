@@ -3,6 +3,9 @@ import { SuiClient } from '@mysten/sui/client';
 import { generateNonce, generateRandomness, jwtToAddress, getExtendedEphemeralPublicKey } from '@mysten/sui/zklogin';
 import { EphemeralKeyPair } from '@/components/zklogin/types';
 import { toB64 } from '@mysten/sui/utils';
+import { API_ENDPOINTS } from '../app/api/endpoints';
+import { api } from '../app/api/clients';
+import { AppError } from '../interfaces/Error';
 
 // Sui Devnet客户端
 const FULLNODE_URL = 'https://fullnode.devnet.sui.io';
@@ -14,23 +17,54 @@ const MAX_EPOCH_INCREMENT = 2;
 export const SuiService = {
   // 创建临时密钥对
   async createEphemeralKeyPair(): Promise<EphemeralKeyPair> {
-    const { epoch } = await suiClient.getLatestSuiSystemState();
-    const currentEpoch = Number(epoch);
-    const maxEpoch = currentEpoch + MAX_EPOCH_INCREMENT;
-    
-    const keypair = new Ed25519Keypair();
-    const randomness = generateRandomness();
-    const nonce = generateNonce(keypair.getPublicKey(), maxEpoch, randomness);
-    
-    return {
-      keypair: {
-        publicKey: toB64(keypair.getPublicKey().toRawBytes()),
-        secretKey: keypair.getSecretKey()
-      },
-      randomness,
-      maxEpoch,
-      nonce
-    };
+    try {
+      // 获取当前Epoch
+      const epochState = await suiClient.getLatestSuiSystemState().catch(error => {
+        console.error('获取Sui系统状态失败:', error);
+        throw new Error(`获取当前Epoch失败: ${error.message || '网络错误'}`);
+      });
+      
+      if (!epochState || !epochState.epoch) {
+        console.error('获取Sui系统状态返回无效:', epochState);
+        throw new Error('无法获取有效的Epoch信息');
+      }
+      
+      const currentEpoch = Number(epochState.epoch);
+      console.log('当前Epoch:', currentEpoch);
+      const maxEpoch = currentEpoch + MAX_EPOCH_INCREMENT;
+      
+      try {
+        // 创建密钥对和随机数
+        const keypair = new Ed25519Keypair();
+        const randomness = generateRandomness();
+        const nonce = generateNonce(keypair.getPublicKey(), maxEpoch, randomness);
+        
+        // 验证生成的密钥对
+        try {
+          const address = keypair.getPublicKey().toSuiAddress();
+          console.log('生成的密钥对临时地址:', address);
+        } catch (verifyError) {
+          console.warn('验证密钥对时出现警告:', verifyError);
+          // 继续执行，不中断流程
+        }
+        
+        return {
+          keypair: {
+            publicKey: toB64(keypair.getPublicKey().toRawBytes()),
+            secretKey: keypair.getSecretKey()
+          },
+          randomness,
+          maxEpoch,
+          nonce
+        };
+      } catch (keypairError: any) {
+        console.error('创建密钥对时出错:', keypairError);
+        throw new Error(`生成密钥对失败: ${keypairError.message || '未知错误'}`);
+      }
+    } catch (error: any) {
+      console.error('createEphemeralKeyPair完整错误:', error);
+      throw error; // 保留原始错误
+    }
   },
 
   // 获取扩展公钥
@@ -89,17 +123,23 @@ export const SuiService = {
   // 激活zkLogin地址
   async activateAddress(address: string): Promise<boolean> {
     try {
-      const response = await fetch('https://faucet.devnet.sui.io/v2/gas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          FixedAmountRequest: { recipient: address }
-        })
-      });
+      const response = await api.post(
+        API_ENDPOINTS.SUI.FAUCET,
+        { FixedAmountRequest: { recipient: address } }
+      );
       
-      return response.ok;
+      if (!response.success) {
+        console.error('激活地址失败:', response.error);
+        return false;
+      }
+      
+      return true;
     } catch (error) {
-      console.error('激活地址失败:', error);
+      if (error instanceof AppError) {
+        console.error('激活地址失败:', error.message);
+      } else {
+        console.error('激活地址失败:', error);
+      }
       return false;
     }
   },

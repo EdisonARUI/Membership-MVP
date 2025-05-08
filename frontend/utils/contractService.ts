@@ -2,6 +2,8 @@ import { SuiClient, SuiTransactionBlockResponse } from '@mysten/sui/client';
 import { Transaction } from '@mysten/sui/transactions';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { CONTRACT_ADDRESSES } from '../config/contracts';
+import { PartialZkLoginSignature } from '@/interfaces/ZkLogin';
+import { useZkLoginTransactions } from '@/hooks/useZkloginTransactions';
 
 // Sui客户端配置
 const FULLNODE_URL = 'https://fullnode.devnet.sui.io';
@@ -21,129 +23,97 @@ export class ContractService {
     return this.client;
   }
 
-  // 注册zkLogin地址
+  // 注册zkLogin地址 - 使用zkLogin签名
   async registerZkLoginAddress(
-    signer: Ed25519Keypair
+    zkLoginAddress: string,
+    ephemeralKeyPair: Ed25519Keypair,
+    partialSignature: PartialZkLoginSignature,
+    userSalt: string,
+    decodedJwt: any
   ): Promise<{ success: boolean; txId?: string; error?: string }> {
     try {
-      const sender = signer.getPublicKey().toSuiAddress();
-      console.log("使用的发送者地址:", sender);
+      console.log("使用的zkLogin发送者地址:", zkLoginAddress);
       
       // 创建交易块
       const txb = new Transaction();
       
-      // 明确设置发送者
-      txb.setSender(sender);
+      // 调用register_zk_address方法
+      txb.moveCall({
+        target: `${CONTRACT_ADDRESSES.AUTHENTICATION.PACKAGE_ID}::${CONTRACT_ADDRESSES.AUTHENTICATION.MODULE_NAME}::register_zk_address`,
+        arguments: [
+          txb.object(CONTRACT_ADDRESSES.AUTHENTICATION.REGISTRY_OBJECT_ID)
+        ]
+      });
       
-      // 获取发送方账户信息，确认有足够的gas
+      // 使用zkLogin签名并执行交易
+      const { signAndExecuteTransaction } = useZkLoginTransactions();
+      
       try {
-        const accountInfo = await this.client.getCoins({
-          owner: sender
-        });
+        const result = await signAndExecuteTransaction(
+          txb,
+          zkLoginAddress,
+          ephemeralKeyPair,
+          partialSignature,
+          userSalt,
+          decodedJwt
+        );
         
-        if (!accountInfo || !accountInfo.data || accountInfo.data.length === 0) {
-          console.error("账户没有可用币:", sender);
+        console.log("交易完整结果:", JSON.stringify(result, null, 2));
+        
+        if (result.effects?.status?.status === "success") {
+          console.log("register_zk_address交易执行成功");
+          return {
+            success: true,
+            txId: result.digest
+          };
+        } else {
+          console.error("交易执行失败详情:", JSON.stringify(result.effects, null, 2));
+          
+          // 提取更详细的错误信息
+          let errorDetails = '';
+          
+          if (result.effects?.status?.error) {
+            errorDetails = result.effects.status.error;
+          } else if (result.effects) {
+            // 尝试从effects中获取更多信息
+            errorDetails = JSON.stringify(result.effects, null, 2);
+          } else if (result.errors && result.errors.length > 0) {
+            errorDetails = JSON.stringify(result.errors, null, 2);
+          } else {
+            errorDetails = JSON.stringify(result, null, 2);
+          }
+          
           return {
             success: false,
-            error: "账户没有可用币，请确保地址已充值SUI"
+            error: `交易执行失败: ${errorDetails}`
           };
         }
-        
-        // 找到一个可用的coin对象作为gas
-        const gasCoin = accountInfo.data[0];
-        console.log("使用gas币:", gasCoin.coinObjectId);
-        
-        // 使用正确的方式引用coin对象
-        txb.setGasPayment([
-          { objectId: gasCoin.coinObjectId, digest: gasCoin.digest, version: gasCoin.version }
-        ]);
-      } catch (gasError: any) {
-        console.error("获取gas币失败:", gasError);
-        return {
-          success: false,
-          error: `获取gas币失败: ${gasError.message}`
-        };
-      }
-      
-      // 根据authentication.move合约，register_zk_address函数签名是:
-      // public entry fun register_zk_address(registry: &mut AuthRegistry, ctx: &mut TxContext)
-      // 只需要提供AuthRegistry对象作为参数
-      try {
-        txb.moveCall({
-          target: `${CONTRACT_ADDRESSES.AUTHENTICATION.PACKAGE_ID}::${CONTRACT_ADDRESSES.AUTHENTICATION.MODULE_NAME}::register_zk_address`,
-          arguments: [
-            txb.object(CONTRACT_ADDRESSES.AUTHENTICATION.REGISTRY_OBJECT_ID)
-          ]
-        });
-      } catch (callError: any) {
-        console.error("创建moveCall失败:", callError);
-        return {
-          success: false,
-          error: `创建moveCall失败: ${callError.message}`
-        };
-      }
-      
-      // 构建交易块
-      let builtTxb;
-      try {
-        console.log("准备构建register_zk_address交易块...");
-        builtTxb = await txb.build({ client: this.client });
-        console.log("register_zk_address交易块构建成功");
-      } catch (buildError: any) {
-        console.error("构建交易块失败:", buildError);
-        return {
-          success: false,
-          error: `构建交易块失败: ${buildError.message}`
-        };
-      }
-      
-      // 签名并执行交易
-      let signData;
-      try {
-        console.log("准备签名register_zk_address交易...");
-        signData = await txb.sign({ client: this.client, signer });
-        console.log("register_zk_address交易已签名，准备执行");
-      } catch (signError: any) {
-        console.error("签名交易失败:", signError);
-        return {
-          success: false,
-          error: `签名交易失败: ${signError.message}`
-        };
-      }
-      
-      // 执行交易
-      let result;
-      try {
-        result = await this.client.executeTransactionBlock({
-          transactionBlock: signData.bytes,
-          signature: signData.signature,
-          options: {
-            showEffects: true,
-            showEvents: true
-          }
-        });
-        
-        console.log("register_zk_address交易执行结果:", result);
       } catch (executeError: any) {
-        console.error("执行交易失败:", executeError);
+        // 更详细的错误日志
+        console.error("执行交易异常详情:", executeError);
+        console.error("异常堆栈:", executeError.stack);
+        
+        let errorMsg = '';
+        if (typeof executeError === 'object') {
+          try {
+            // 尝试提取所有可能的错误信息
+            errorMsg = JSON.stringify({
+              message: executeError.message,
+              name: executeError.name,
+              code: executeError.code,
+              cause: executeError.cause,
+              data: executeError.data
+            }, (key, value) => value === undefined ? 'undefined' : value, 2);
+          } catch (e) {
+            errorMsg = executeError.message || executeError.toString();
+          }
+        } else {
+          errorMsg = String(executeError);
+        }
+        
         return {
           success: false,
-          error: `执行交易失败: ${executeError.message}`
-        };
-      }
-      
-      // 检查交易是否成功
-      if (result.effects?.status?.status === "success") {
-        console.log("register_zk_address交易执行成功");
-        return {
-          success: true,
-          txId: result.digest
-        };
-      } else {
-        console.error("register_zk_address交易执行失败:", result.effects?.status);
-        return {
-          success: false,
-          error: `交易执行失败: ${result.effects?.status?.error || "未知错误"}`
+          error: `执行交易失败: ${errorMsg}`
         };
       }
     } catch (error: any) {
@@ -156,149 +126,57 @@ export class ContractService {
   }
 
   // 检查地址是否已认证
-  async isAddressVerified(
-    address: string
-  ): Promise<{ verified: boolean; error?: string }> {
+  async isAddressVerified(address: string): Promise<{ verified: boolean; error?: string }> {
     try {
-      console.log("检查地址认证状态:", address);
-      
-      // 验证地址格式
-      if (!address || !address.startsWith('0x') || address.length < 32) {
-        console.error("无效的地址格式:", address);
-        return { verified: false, error: "无效的地址格式" };
-      }
-      
-      // 创建交易块
       const txb = new Transaction();
+      txb.moveCall({
+        target: `${CONTRACT_ADDRESSES.AUTHENTICATION.PACKAGE_ID}::${CONTRACT_ADDRESSES.AUTHENTICATION.MODULE_NAME}::is_address_verified`,
+        arguments: [txb.object(CONTRACT_ADDRESSES.AUTHENTICATION.REGISTRY_OBJECT_ID), txb.pure.address(address)]
+      });
       
-      // 明确设置发送者 - 这里可能出现了反序列化错误
-      try {
-        txb.setSender(address);
-      } catch (error) {
-        console.error("设置发送者失败:", error);
-        return { verified: false, error: "设置发送者失败" };
-      }
+      const result = await this.client.devInspectTransactionBlock({
+        sender: address,
+        transactionBlock: txb
+      });
       
-      // 调用is_address_verified方法
-      let moveCallResult;
-      try {
-        moveCallResult = txb.moveCall({
-          target: `${CONTRACT_ADDRESSES.AUTHENTICATION.PACKAGE_ID}::${CONTRACT_ADDRESSES.AUTHENTICATION.MODULE_NAME}::is_address_verified`,
-          arguments: [
-            txb.object(CONTRACT_ADDRESSES.AUTHENTICATION.REGISTRY_OBJECT_ID),
-            txb.pure.address(address)
-          ]
-        });
-        console.log("moveCall创建成功:", moveCallResult);
-      } catch (error) {
-        console.error("创建moveCall失败:", error);
-        return { verified: false, error: "创建moveCall失败" };
-      }
-      
-      // 构建交易
-      let builtTxb;
-      try {
-        builtTxb = await txb.build({ client: this.client });
-        console.log("交易构建成功");
-      } catch (error) {
-        console.error("构建交易失败:", error);
-        return { verified: false, error: "构建交易失败" };
-      }
-      
-      // 执行只读调用
-      let result;
-      try {
-        result = await this.client.devInspectTransactionBlock({
-          transactionBlock: builtTxb,
-          sender: address
-        });
-        console.log("验证结果:", result);
-      } catch (error) {
-        console.error("执行devInspectTransactionBlock失败:", error);
-        // 如果是反序列化错误，很可能该地址尚未注册，直接返回false
-        return { verified: false };
-      }
-      
-      // 修改点：更安全地解析结果
-      if (result && result.results && result.results.length > 0) {
-        try {
-          // 使用更安全的解析方式
-          const returnValues = result.results[0].returnValues;
-          if (returnValues && returnValues.length > 0) {
-            // 尝试将返回值解析为布尔值
-            // 检查结果类型并相应处理
-            if (typeof returnValues[0] === 'boolean') {
-              return { verified: returnValues[0] };
-            } else if (typeof returnValues[0] === 'number') {
-              return { verified: returnValues[0] !== 0 };
-            } else if (typeof returnValues[0] === 'string' && (returnValues[0] === 'true' || returnValues[0] === '1')) {
-              return { verified: true };
-            } else {
-              console.log("无法识别的返回值类型:", typeof returnValues[0], returnValues[0]);
-              return { verified: false };
-            }
-          }
-        } catch (error) {
-          console.error("解析结果失败:", error);
-          return { verified: false, error: "解析结果失败" };
+      // 检查返回值 - Sui返回的格式是 [number[], string]，第一个元素是BCS编码，第二个是类型
+      if (result.results && result.results[0]?.returnValues && result.results[0].returnValues.length > 0) {
+        // 获取原始返回值 - 布尔值在Sui中通常用0表示false，1表示true
+        const bcsBytes = result.results[0].returnValues[0][0]; // 获取BCS编码的字节数组
+        
+        // 通常布尔值会被编码为单个字节，1表示true，0表示false
+        if (Array.isArray(bcsBytes) && bcsBytes.length > 0) {
+          return { verified: bcsBytes[0] === 1 };
         }
+        
+        console.log("返回值解析:", result.results[0].returnValues);
       }
       
-      return { verified: false };
+      return { verified: false, error: "无法解析返回值" };
     } catch (error: any) {
-      console.error('检查地址认证状态失败:', error);
-      return {
-        verified: false,
-        error: error.message || '检查地址认证状态时发生未知错误'
+      console.error("检查地址验证状态失败:", error);
+      return { 
+        verified: false, 
+        error: `检查地址验证失败: ${error.message || JSON.stringify(error)}`
       };
     }
   }
 
-  // 绑定钱包地址
+  // 绑定钱包地址 - 使用zkLogin签名
   async bindWalletAddress(
-    signer: Ed25519Keypair,
-    userId: string
+    zkLoginAddress: string,
+    userId: string,
+    ephemeralKeyPair: Ed25519Keypair,
+    partialSignature: PartialZkLoginSignature,
+    userSalt: string,
+    decodedJwt: any
   ): Promise<{ success: boolean; txId?: string; error?: string }> {
     try {
-      const sender = signer.getPublicKey().toSuiAddress();
-      console.log("使用的发送者地址:", sender);
+      console.log("使用的zkLogin发送者地址:", zkLoginAddress);
       console.log("绑定的用户ID (原始):", userId);
       
       // 创建交易块
       const txb = new Transaction();
-      
-      // 明确设置发送者
-      txb.setSender(sender);
-      
-      // 获取发送方账户信息，确认有足够的gas
-      try {
-        const accountInfo = await this.client.getCoins({
-          owner: sender
-        });
-        
-        if (!accountInfo || !accountInfo.data || accountInfo.data.length === 0) {
-          console.error("账户没有可用币:", sender);
-          return {
-            success: false,
-            error: "账户没有可用币，请确保地址已充值SUI"
-          };
-        }
-        
-        // 找到一个可用的coin对象作为gas
-        const gasCoin = accountInfo.data[0];
-        console.log("使用gas币:", gasCoin.coinObjectId);
-        
-        // 使用正确的方式引用coin对象
-        txb.setGasPayment([
-          { objectId: gasCoin.coinObjectId, digest: gasCoin.digest, version: gasCoin.version }
-        ]);
-      } catch (gasError: any) {
-        console.error("获取gas币失败:", gasError);
-        return {
-          success: false,
-          error: `获取gas币失败: ${gasError.message}`
-        };
-      }
       
       // 确保userId是字符串并且不包含特殊字符
       // 我们只保留字母、数字和基本标点符号
@@ -322,8 +200,6 @@ export class ContractService {
       }
       
       // 调用bind_wallet_address方法
-      // 根据authentication.move合约，函数签名是:
-      // public entry fun bind_wallet_address(registry: &mut AuthRegistry, user_id: vector<u8>, ctx: &mut TxContext)
       txb.moveCall({
         target: `${CONTRACT_ADDRESSES.AUTHENTICATION.PACKAGE_ID}::${CONTRACT_ADDRESSES.AUTHENTICATION.MODULE_NAME}::bind_wallet_address`,
         arguments: [
@@ -332,39 +208,40 @@ export class ContractService {
         ]
       });
       
-      // 构建交易块
-      console.log("准备构建交易块...");
-      const builtTxb = await txb.build({ client: this.client });
-      console.log("交易块构建成功");
+      // 使用zkLogin签名并执行交易
+      const { signAndExecuteTransaction } = useZkLoginTransactions();
       
-      // 签名并执行交易
-      console.log("准备签名交易...");
-      const signData = await txb.sign({ client: this.client, signer });
-      console.log("交易已签名，准备执行");
-      
-      const result = await this.client.executeTransactionBlock({
-        transactionBlock: signData.bytes,
-        signature: signData.signature,
-        options: {
-          showEffects: true,
-          showEvents: true
+      try {
+        const result = await signAndExecuteTransaction(
+          txb,
+          zkLoginAddress,
+          ephemeralKeyPair,
+          partialSignature,
+          userSalt,
+          decodedJwt
+        );
+        
+        console.log("交易执行结果:", result);
+        
+        // 检查交易是否成功
+        if (result.effects?.status?.status === "success") {
+          console.log("交易执行成功");
+          return {
+            success: true,
+            txId: result.digest
+          };
+        } else {
+          console.error("交易执行失败:", result.effects?.status);
+          return {
+            success: false,
+            error: `交易执行失败: ${result.effects?.status?.error || "未知错误"}`
+          };
         }
-      });
-      
-      console.log("交易执行结果:", result);
-      
-      // 检查交易是否成功
-      if (result.effects?.status?.status === "success") {
-        console.log("交易执行成功");
-        return {
-          success: true,
-          txId: result.digest
-        };
-      } else {
-        console.error("交易执行失败:", result.effects?.status);
+      } catch (executeError: any) {
+        console.error("执行交易失败:", executeError);
         return {
           success: false,
-          error: `交易执行失败: ${result.effects?.status?.error || "未知错误"}`
+          error: `执行交易失败: ${executeError.message}`
         };
       }
     } catch (error: any) {

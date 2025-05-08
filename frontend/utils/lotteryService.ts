@@ -1,139 +1,178 @@
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 import { SuiClient } from '@mysten/sui/client';
-import { contractService, CONTRACT_ADDRESSES } from './contractService';
+import { contractService } from './contractService';
+import { COMMON_CONTRACT, CONTRACT_ADDRESSES } from '../config/contracts';
 import { toast } from 'react-hot-toast';
-
-export interface DrawResult {
-  success: boolean;
-  txId?: string;
-  amount?: number;
-  error?: string;
-}
+import { DrawResult, LotteryHistoryResponse } from '../interfaces/Lottery';
+import { ZkLoginStorage } from './storage';
+import { SuiService } from './sui';
+import { genAddressSeed, getZkLoginSignature } from '@mysten/sui/zklogin';
+import { API_ENDPOINTS } from '../app/api/endpoints';
+import { api } from '../app/api/clients';
 
 export class LotteryService {
   private client: SuiClient;
 
   constructor() {
+    // 使用contractService获取客户端，而不是直接创建
     this.client = contractService.getClient();
   }
 
-  // 获取奖池对象ID - 这里需要根据实际部署的奖池对象ID进行替换
-  private getPoolObjectId(): string {
-    // 实际使用中，这应该从配置或数据库中获取
-    // 这里使用一个示例ID，实际使用时需要替换
-    return '0x06717c46fb12546b1b1ecc32976a1b40bf8ea991f99f22364d465eab716faf44';
-  }
-  
-  // 获取Random对象ID - 这里需要根据实际部署的Random对象ID进行替换
-  private getRandomObjectId(): string {
-    // Sui DevNet上的全局共享Random对象
-    // 在实际使用中，应当从网络获取最新的ID
-    return '0x0000000000000000000000000000000000000000000000000000000000000008';
-  }
-
   // 即时抽奖
-  async instantDraw(
-    signer: Ed25519Keypair
-  ): Promise<DrawResult> {
+  async instantDraw(): Promise<DrawResult> {
     try {
-      const sender = signer.getPublicKey().toSuiAddress();
-      console.log("使用的发送者地址:", sender);
+      // 获取zkLogin地址
+      const zkLoginAddress = ZkLoginStorage.getZkLoginAddress();
+      if (!zkLoginAddress) {
+        throw new Error('未找到zkLogin地址，请先完成zkLogin认证');
+      }
       
-      // 创建交易块
+      console.log("使用的发送者地址:", zkLoginAddress);
+      
+      // 获取必要数据
+      const ephemeralKeyPairData = ZkLoginStorage.getEphemeralKeypair();
+      if (!ephemeralKeyPairData) {
+        throw new Error('未找到临时密钥对，请先完成zkLogin认证');
+      }
+      
+      // 重建临时密钥对
+      const ephemeralKeyPair = SuiService.recreateKeypairFromStored(ephemeralKeyPairData.keypair);
+      
+      // 获取其他必要的zkLogin数据
+      const decodedJwt = ZkLoginStorage.getDecodedJwt();
+      if (!decodedJwt) {
+        throw new Error('未找到JWT数据，请重新登录');
+      }
+      
+      const userSalt = ZkLoginStorage.getZkLoginUserSalt();
+      if (!userSalt) {
+        throw new Error('未找到用户盐值，请重新登录');
+      }
+      
+      // 使用ZkLoginStorage中的zkLoginSignature或从localStorage获取
+      const partialZkLoginSignature = ZkLoginStorage.getZkLoginPartialSignature();
+        
+      if (!partialZkLoginSignature) {
+        throw new Error('未找到zkLogin部分签名，请重新登录');
+      }
+      
+      console.log("准备创建和签名交易...");
+      
+      // 创建交易
       const txb = new Transaction();
       
       // 设置发送者
-      txb.setSender(sender);
+      txb.setSender(zkLoginAddress);
       
-      // 调用lottery合约的instant_draw方法
-      // 根据lottery.move合约，instant_draw函数签名是:
-      // public entry fun instant_draw(pool: &mut InstantPool, r: &Random, auth: &AuthRegistry, ctx: &mut TxContext)
-      try {
-        txb.moveCall({
-          target: `${CONTRACT_ADDRESSES.LOTTERY.PACKAGE_ID}::${CONTRACT_ADDRESSES.LOTTERY.MODULE_NAME}::instant_draw`,
-          arguments: [
-            txb.object(this.getPoolObjectId()),
-            txb.object(this.getRandomObjectId()),
-            txb.object(contractService.getAuthRegistryObjectId())
-          ]
-        });
-      } catch (callError: any) {
-        console.error("创建moveCall失败:", callError);
-        return {
-          success: false,
-          error: `创建moveCall失败: ${callError.message}`
-        };
-      }
-      
-      // 构建用于赞助的交易参数对象
-      const txData = {
-        sender,
-        contractPackage: CONTRACT_ADDRESSES.LOTTERY.PACKAGE_ID,
-        contractModule: CONTRACT_ADDRESSES.LOTTERY.MODULE_NAME,
-        method: 'instant_draw',
-        args: [
-          this.getPoolObjectId(),
-          this.getRandomObjectId(),
-          contractService.getAuthRegistryObjectId()
+      // 添加抽奖调用
+      txb.moveCall({
+        target: `${CONTRACT_ADDRESSES.LOTTERY.PACKAGE_ID}::${CONTRACT_ADDRESSES.LOTTERY.MODULE_NAME}::instant_draw`,
+        arguments: [
+          txb.object(CONTRACT_ADDRESSES.LOTTERY.LOTTERY_POOL),
+          txb.object(COMMON_CONTRACT.RANDOM_NUMBER_GENERATOR),
+          txb.object(CONTRACT_ADDRESSES.AUTHENTICATION.REGISTRY_OBJECT_ID)
         ]
-      };
+      });
       
-      // 调用赞助交易API
-      try {
-        console.log("请求赞助交易...");
-        const response = await fetch('/api/sponsoredDraw', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
+      // 使用临时密钥对签名
+      console.log("使用临时密钥对签名交易...");
+      const { bytes, signature: userSignature } = await txb.sign({
+        client: this.client,
+        signer: ephemeralKeyPair,
+      });
+      
+      // 生成地址种子
+      console.log("生成地址种子...");
+      const addressSeed = genAddressSeed(
+        BigInt(userSalt),
+        "sub",
+        decodedJwt.sub,
+        decodedJwt.aud
+      ).toString();
+      
+      // 创建zkLogin签名
+      console.log("创建zkLogin签名...");
+      const zkLoginSignature = getZkLoginSignature({
+        inputs: {
+          proofPoints: partialZkLoginSignature.inputs.proofPoints,
+          issBase64Details: {
+            value: partialZkLoginSignature.inputs.jwkHex,
+            indexMod4: 0, // 这个值可能需要根据实际情况调整
           },
-          body: JSON.stringify({
-            txData,
-            senderAddress: sender
-          })
-        });
+          headerBase64: Buffer.from(
+            JSON.stringify({ alg: "RS256", typ: "JWT" })
+          ).toString('base64'),
+          addressSeed
+        },
+        maxEpoch: partialZkLoginSignature.inputs.maxEpoch,
+        userSignature,
+      });
+      
+      // 执行交易
+      console.log("提交交易到链上...");
+      const txResult = await this.client.executeTransactionBlock({
+        transactionBlock: bytes,
+        signature: zkLoginSignature,
+      });
+      
+      console.log("交易结果:", txResult);
+      
+      // 处理交易结果
+      if (txResult.effects?.status?.status === 'success') {
+        // 检查是否有 InstantWin 事件
+        const events = txResult.events || [];
+        const instantWinEvent = events.find((event: any) => 
+          event.type.includes('InstantWin')
+        );
         
-        if (response.ok) {
-          const result = await response.json();
-          console.log("赞助抽奖交易执行结果:", result);
-          
-          if (result.success) {
-            console.log("抽奖交易执行成功");
-            
-            // 随机生成一个中奖结果，就像它是从链上返回的一样
-            // 仅用于演示，实际生产环境应该来自链上数据
-            const randomWin = Math.random() < 0.3; // 30%的几率中奖
-            const winAmount = randomWin ? Math.floor(Math.random() * 1000000000) : 0; // 随机奖励0-1 SUI
-            
-            // 如果中奖，添加到历史记录
-            if (randomWin) {
-              toast.success(`恭喜！你赢得了 ${winAmount / 1000000000} SUI`);
-            } else {
-              toast.success('未中奖，再接再厉！');
+        // 如果有 InstantWin 事件，表示中奖
+        const randomWin = !!instantWinEvent;
+        const winAmount = randomWin && instantWinEvent && instantWinEvent.parsedJson 
+          ? Number((instantWinEvent.parsedJson as { amount: string }).amount) 
+          : 0;
+        
+        console.log("抽奖结果:", { randomWin, winAmount });
+        
+        // 记录抽奖结果到后端
+        try {
+          // 使用API客户端调用而不是直接fetch
+          const response = await api.post(
+            API_ENDPOINTS.LOTTERY.RECORD,
+            {
+              player_address: zkLoginAddress,
+              tx_hash: txResult.digest,
+              win_amount: winAmount
             }
-            
-            return {
-              success: true,
-              txId: result.txId,
-              amount: winAmount
-            };
-          } else {
-            console.error("抽奖交易执行失败:", result.error);
-            toast.error(`抽奖失败: ${result.error}`);
-            return {
-              success: false,
-              error: result.error || "未知错误"
-            };
+          );
+
+          if (!response.success) {
+            console.error("记录抽奖结果失败:", response.error);
           }
-        } else {
-          const errorData = await response.json();
-          throw new Error(errorData.error || '赞助交易请求失败');
+        } catch (e) {
+          console.error("记录抽奖结果失败:", e);
+          // 继续执行，不中断流程
         }
-      } catch (error: any) {
-        console.error('赞助交易失败:', error);
+        
+        // 中奖处理
+        if (randomWin) {
+          toast.success(`恭喜！你赢得了 ${winAmount / 1000000000} SUI`);
+        } else {
+          toast.success('未中奖，再接再厉！');
+        }
+        
+        // 返回DrawResult结构，与Lottery.ts中定义一致
+        return {
+          success: true,
+          txId: txResult.digest,
+          amount: winAmount
+        };
+      } else {
+        const errorMsg = txResult.effects?.status?.error || '未知错误';
+        console.error("交易执行失败:", errorMsg);
+        
         return {
           success: false,
-          error: error.message || '赞助交易过程中发生未知错误'
+          error: `交易执行失败: ${errorMsg}`
         };
       }
     } catch (error: any) {
@@ -141,6 +180,35 @@ export class LotteryService {
       return {
         success: false,
         error: error.message || '抽奖过程中发生未知错误'
+      };
+    }
+  }
+  
+  // 获取抽奖历史
+  async getLotteryHistory(player?: string, limit: number = 10, winnersOnly: boolean = false): Promise<LotteryHistoryResponse> {
+    try {
+      // 构建查询参数
+      let queryParams = new URLSearchParams();
+      if (player) queryParams.append('player', player);
+      if (limit) queryParams.append('limit', limit.toString());
+      if (winnersOnly) queryParams.append('winners_only', 'true');
+      
+      // 使用API客户端调用
+      const url = `${API_ENDPOINTS.LOTTERY.HISTORY}?${queryParams.toString()}`;
+      const response = await api.get<LotteryHistoryResponse>(url);
+      
+      if (!response.success) {
+        throw new Error(response.error?.message || '获取抽奖历史失败');
+      }
+      
+      return response.data as LotteryHistoryResponse;
+    } catch (error: any) {
+      console.error('获取抽奖历史失败:', error);
+      // 返回一个符合LotteryHistoryResponse格式的错误响应
+      return {
+        success: false,
+        error: error.message || '获取抽奖历史失败',
+        records: []
       };
     }
   }
