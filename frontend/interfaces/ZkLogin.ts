@@ -15,14 +15,13 @@ export interface PartialZkLoginSignature {
       b: string[][];
       c: string[];
     };
+    issBase64Details: {
+      value: string;  // jwkHex
+      indexMod4: number;
+    };
+    headerBase64: string;
+  };
     maxEpoch: number;
-    jwtRandomness: string;
-    kpSignature: string;
-    jwkHex: string;
-    salt: string;
-    ephemeralPublicKey: string;
-    jwt: string;
-  }
 }
 
 /**
@@ -54,4 +53,5 @@ export interface ZkProofResponseData {
   error?: string;
   proof?: PartialZkLoginSignature;
   details?: any;
+  cached?: boolean;
 } 

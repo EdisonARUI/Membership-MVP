@@ -26,3 +26,19 @@ export interface DrawResult {
     error?: string;
     message?: string;
   }
+
+  export interface LotteryRecord {
+    id: string;
+    player_address: string;
+    win_amount: number;
+    tx_hash: string;
+    created_at: string;
+  }
+
+  export interface LotteryHistoryResponse {
+    success: boolean;
+    records?: LotteryRecord[];
+    error?: string;
+    total_count?: number;
+    total_amount?: number;
+  }
