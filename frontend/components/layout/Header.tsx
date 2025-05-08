@@ -5,6 +5,7 @@ import { useUser } from "@/hooks/use-user";
 import { createClient } from "@/utils/supabase/client";
 import { useLog } from "@/hooks/useLog";
 import { useZkLogin } from "@/contexts/ZkLoginContext";
+import { useAuth } from "@/contexts/AuthContext";
 import LotteryDialog from "../lottery/LotteryDialog";
 import { FcGoogle } from "react-icons/fc";
 
@@ -19,15 +20,21 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
   const userMenuRef = useRef<HTMLDivElement>(null);
   const { addLog } = useLog();
   const supabase = createClient();
-  const { handleGoogleAuth, zkLoginAddress, loading } = useZkLogin();
+  
+  // 使用AuthContext处理登录逻辑，ZkLoginContext只用于状态获取
+  const { handleLogin } = useAuth();
+  const { state } = useZkLogin();
+  const { zkLoginAddress, loading } = state;
+  
   const [showLotteryDialog, setShowLotteryDialog] = useState(false);
 
-  const handleZkLogin = async () => {
+  const handleGoogleLogin = async () => {
     try {
-      addLog("开始zkLogin流程...");
-      await handleGoogleAuth();
+      addLog("开始Google登录流程...");
+      // 调用AuthContext的handleLogin方法
+      await handleLogin();
     } catch (error: any) {
-      addLog(`zkLogin失败: ${error.message}`);
+      addLog(`Google登录失败: ${error.message}`);
     }
   };
 
@@ -145,7 +152,7 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
           ) : (
             <>
               <button
-                onClick={handleZkLogin}
+                onClick={handleGoogleLogin}
                 disabled={loading}
                 className="w-full max-w-sm px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition flex items-center justify-center space-x-3"
               >
@@ -154,12 +161,6 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
                   {loading ? "处理中..." : "Continue with Google"}
                 </span>
               </button>
-              {/* <Link 
-                href="/sign-in"
-                className="px-4 py-2 bg-yellow-400 hover:bg-yellow-500 text-black rounded-lg transition-colors"
-              >
-                登录
-              </Link> */}
             </>
           )}
         </div>

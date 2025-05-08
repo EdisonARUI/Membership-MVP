@@ -4,6 +4,7 @@ import { encodedRedirect } from "@/utils/utils";
 import { createClient } from "@/utils/supabase/server";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { parseJwt } from "@/utils/jwt/server";
 
 export const signUpAction = async (formData: FormData) => {
   const email = formData.get("email")?.toString();
@@ -364,4 +365,117 @@ export async function checkDatabasePermissions() {
   }
   
   return results;
+}
+
+// zkLogin相关函数
+export async function getUserSalt(jwt: string) {
+  console.log("开始获取用户盐值");
+  
+  if (!jwt) {
+    console.error("JWT为空，无法获取盐值");
+    return { success: false, error: "JWT不能为空" };
+  }
+  
+  try {
+    // 调用内部API获取盐值
+    const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/zkLogin/salt`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ jwt }),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("获取用户盐值失败:", errorData);
+      return { 
+        success: false, 
+        error: errorData.error || `请求失败：${response.status} ${response.statusText}`
+      };
+    }
+    
+    const data = await response.json();
+    console.log("成功获取用户盐值:", data);
+    
+    return {
+      success: true,
+      salt: data.salt
+    };
+  } catch (error: any) {
+    console.error("获取用户盐值时发生错误:", error);
+    return { 
+      success: false, 
+      error: error.message || "未知错误" 
+    };
+  }
+}
+
+// 关联zkLogin盐值到已登录用户
+export async function associateSaltWithUser(jwt: string, salt: string) {
+  console.log("开始关联盐值到用户");
+  
+  const supabase = await createClient();
+  
+  try {
+    // 获取当前用户
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
+      console.error("获取当前用户失败:", userError);
+      return { 
+        success: false, 
+        error: userError?.message || "未登录或无法获取用户信息" 
+      };
+    }
+    
+    // 解析JWT，提取必要信息
+    let decodedJwt;
+    try {
+      // 使用服务器端 parseJwt 函数
+      decodedJwt = parseJwt(jwt);
+    } catch (error: any) {
+      console.error("JWT解码失败:", error);
+      return { 
+        success: false, 
+        error: `JWT解码失败: ${error.message}` 
+      };
+    }
+    
+    // 提取必要信息
+    const provider = decodedJwt.iss;
+    const providerUserId = decodedJwt.sub;
+    const audience = Array.isArray(decodedJwt.aud) ? decodedJwt.aud[0] : decodedJwt.aud || '';
+    
+    // 更新或插入盐值记录
+    const { error: upsertError } = await supabase
+      .from('zklogin_user_salts')
+      .upsert({
+        user_id: user.id,
+        provider,
+        provider_user_id: providerUserId,
+        audience,
+        salt,
+        updated_at: new Date().toISOString()
+      });
+    
+    if (upsertError) {
+      console.error("更新盐值记录失败:", upsertError);
+      return { 
+        success: false, 
+        error: upsertError.message 
+      };
+    }
+    
+    return {
+      success: true,
+      message: "已成功关联盐值到用户账户"
+    };
+  } catch (error: any) {
+    console.error("关联盐值时发生错误:", error);
+    return { 
+      success: false, 
+      error: error.message || "未知错误" 
+    };
+  }
 }
