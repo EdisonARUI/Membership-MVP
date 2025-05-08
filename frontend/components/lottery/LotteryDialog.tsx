@@ -4,18 +4,25 @@ import { useUser } from '@/hooks/use-user';
 import { useZkLogin } from '@/contexts/ZkLoginContext';
 import { useLog } from '@/hooks/useLog';
 import { toast } from 'react-hot-toast';
-import { ZkLoginStorage } from '@/utils/storage';
-import { SuiService } from '@/utils/sui';
 import { LotteryService } from '@/utils/lotteryService';
+import { LotteryRecord, LotteryHistoryResponse, DrawResult } from '@/interfaces/Lottery';
 
 interface LotteryDialogProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+// 本地UI展示用历史记录类型
+interface LotteryHistoryItem {
+  player: string;
+  amount: number;
+  time: Date;
+}
+
 export default function LotteryDialog({ isOpen, onClose }: LotteryDialogProps) {
   const { user } = useUser();
-  const { zkLoginAddress } = useZkLogin();
+  const { state } = useZkLogin();
+  const { zkLoginAddress } = state;
   const { addLog } = useLog();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{
@@ -23,34 +30,58 @@ export default function LotteryDialog({ isOpen, onClose }: LotteryDialogProps) {
     amount?: number;
     message?: string;
   } | null>(null);
-  const [lotteryHistory, setLotteryHistory] = useState<Array<{
-    player: string;
+  const [lotteryHistory, setLotteryHistory] = useState<LotteryHistoryItem[]>([]);
+  const [totalStats, setTotalStats] = useState<{
+    count: number;
     amount: number;
-    time: Date;
-  }>>([]);
+  }>({ count: 0, amount: 0 });
 
   useEffect(() => {
-    // 可以在这里加载抽奖历史记录
     if (isOpen) {
       fetchLotteryHistory();
+      
+      // 确保zkLogin初始化
+      if (!zkLoginAddress) {
+        addLog("zkLogin地址未初始化，请先完成登录");
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, zkLoginAddress]);
+
+  // 转换API记录为UI展示格式
+  const convertToHistoryItems = (records: LotteryRecord[]): LotteryHistoryItem[] => {
+    return records.map(record => ({
+      player: record.player_address,
+      amount: record.win_amount,
+      time: new Date(record.created_at)
+    }));
+  };
 
   const fetchLotteryHistory = async () => {
-    // 这里可以从数据库或链上加载抽奖历史
-    // 目前使用模拟数据
-    setLotteryHistory([
-      {
-        player: '0x7d87c83c2f71bb9388262c06f0eec7b57ee651bf1892a7a6fd6f1b1b931ac7fc',
-        amount: 1000000000, // 1 SUI
-        time: new Date(Date.now() - 3600000)
-      },
-      {
-        player: '0x8aa5e821e6cdce5601d62099d5ac068ca96b3d241a379a0e0b59756d7dcadb65',
-        amount: 500000000, // 0.5 SUI
-        time: new Date(Date.now() - 7200000)
+    try {
+      if (zkLoginAddress) {
+        const lotteryService = new LotteryService();
+        // 获取用户的抽奖历史
+        const response = await lotteryService.getLotteryHistory(zkLoginAddress, 10, false);
+        
+        if (response.success && response.records) {
+          setLotteryHistory(convertToHistoryItems(response.records));
+          
+          // 设置统计数据
+          setTotalStats({
+            count: response.total_count || 0,
+            amount: response.total_amount || 0
+          });
+          return;
+        }
       }
-    ]);
+      
+      // 如果无法获取真实数据，使用空数组
+      setLotteryHistory([]);
+      setTotalStats({ count: 0, amount: 0 });
+    } catch (error) {
+      console.error('获取抽奖历史失败:', error);
+      setLotteryHistory([]);
+    }
   };
 
   const handleDraw = async () => {
@@ -64,18 +95,10 @@ export default function LotteryDialog({ isOpen, onClose }: LotteryDialogProps) {
     addLog("开始抽奖...");
 
     try {
-      // 从存储中获取临时密钥对
-      const ephemeralKeypair = ZkLoginStorage.getEphemeralKeypair();
-      if (!ephemeralKeypair) {
-        throw new Error('找不到临时密钥对，无法完成抽奖');
-      }
-
-      // 重建密钥对
-      const keypair = SuiService.recreateKeypairFromStored(ephemeralKeypair.keypair);
-      
-      // 调用抽奖合约
+      // 调用抽奖服务，抽奖逻辑转移到LotteryService中处理
       const lotteryService = new LotteryService();
-      const drawResult = await lotteryService.instantDraw(keypair);
+      addLog("调用抽奖合约...");
+      const drawResult = await lotteryService.instantDraw();
       
       addLog(`抽奖结果: ${JSON.stringify(drawResult)}`);
       
@@ -86,19 +109,8 @@ export default function LotteryDialog({ isOpen, onClose }: LotteryDialogProps) {
           message: drawResult.amount ? `恭喜！你赢得了 ${drawResult.amount / 1000000000} SUI` : '很遗憾，未中奖'
         });
         
-        // 如果中奖，添加到历史记录
-        if (drawResult.amount) {
-          setLotteryHistory(prev => [
-            {
-              player: zkLoginAddress,
-              amount: drawResult.amount!,
-              time: new Date()
-            },
-            ...prev
-          ]);
-        }
-        
-        toast.success(drawResult.amount ? '恭喜，抽奖成功！' : '未中奖，再接再厉！');
+        // 重新获取最新抽奖历史，包括本次结果
+        fetchLotteryHistory();
       } else {
         setResult({
           success: false,
@@ -171,22 +183,32 @@ export default function LotteryDialog({ isOpen, onClose }: LotteryDialogProps) {
         
         {/* 抽奖历史 */}
         <div>
-          <h3 className="text-lg font-semibold text-white mb-2">最近中奖</h3>
+          <h3 className="text-lg font-semibold text-white mb-2">
+            我的抽奖 
+            {totalStats.count > 0 && (
+              <span className="text-sm font-normal text-gray-400 ml-2">
+                共 {totalStats.count} 次，已赢得 {totalStats.amount / 1000000000} SUI
+              </span>
+            )}
+          </h3>
           <div className="space-y-2">
             {lotteryHistory.length > 0 ? (
               lotteryHistory.map((item, idx) => (
-                <div key={idx} className="flex justify-between items-center bg-slate-700 bg-opacity-50 p-2 rounded">
+                <div key={idx} className={`flex justify-between items-center p-2 rounded ${item.amount > 0 ? 'bg-green-800 bg-opacity-20' : 'bg-slate-700 bg-opacity-50'}`}>
                   <div className="overflow-hidden">
-                    <p className="text-sm text-gray-300 truncate">{item.player.slice(0, 8)}...{item.player.slice(-4)}</p>
                     <p className="text-xs text-gray-400">{item.time.toLocaleString()}</p>
                   </div>
-                  <div className="text-yellow-400 font-semibold">
-                    {item.amount / 1000000000} SUI
+                  <div className={`font-semibold ${item.amount > 0 ? 'text-yellow-400' : 'text-gray-400'}`}>
+                    {item.amount > 0 
+                      ? `+${item.amount / 1000000000} SUI` 
+                      : '未中奖'}
                   </div>
                 </div>
               ))
+            ) : zkLoginAddress ? (
+              <p className="text-gray-500 text-center py-4">暂无抽奖记录</p>
             ) : (
-              <p className="text-gray-500 text-center py-2">暂无中奖记录</p>
+              <p className="text-gray-500 text-center py-4">请先完成 zkLogin 认证</p>
             )}
           </div>
         </div>
