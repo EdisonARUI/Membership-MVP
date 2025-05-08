@@ -42,12 +42,14 @@ export interface ZkProofResult {
 }
 
 export interface ZkLoginState {
+  status?: 'idle' | 'initializing' | 'ready' | 'error';
   zkLoginAddress: string | null;
   ephemeralKeypair: EphemeralKeyPair | null;
   isInitialized: boolean;
   error: string | null;
   loading: boolean;
   jwt: string | null;
+  partialSignature?: any | null;
 }
 
 export interface ZkLoginSignature {
