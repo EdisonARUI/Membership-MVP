@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { useSubscription } from '@/hooks/useSubscription';
-import { useLog } from '@/hooks/useLog';
+import { useLogContext } from '@/contexts/LogContext';
 import { createClient } from '@/utils/supabase/client';
 
 interface PaymentContextType {
@@ -19,7 +19,7 @@ const PaymentContext = createContext<PaymentContextType | undefined>(undefined);
 export function PaymentProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { createSubscription } = useSubscription();
-  const { addLog } = useLog();
+  const { addLog } = useLogContext();
   const supabase = createClient();
 
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);

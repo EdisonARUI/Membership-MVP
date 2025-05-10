@@ -1,6 +1,7 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { useLogContext } from '@/contexts/LogContext';
 
 interface SuiPriceContextType {
   suiPrice: number | null;
@@ -11,28 +12,13 @@ interface SuiPriceContextType {
 const SuiPriceContext = createContext<SuiPriceContextType | undefined>(undefined);
 
 export function SuiPriceProvider({ 
-  children,
-  onLog
+  children
 }: { 
   children: ReactNode;
-  onLog?: (message: string) => void;
 }) {
   const [suiPrice, setSuiPrice] = useState<number | null>(null);
   const [isLoadingPrice, setIsLoadingPrice] = useState(false);
-  
-  // 使用 useRef 存储 onLog 以保持稳定引用
-  const onLogRef = useRef(onLog);
-  
-  // 更新 ref 值
-  useEffect(() => {
-    onLogRef.current = onLog;
-  }, [onLog]);
-  
-  const log = useCallback((message: string) => {
-    if (onLogRef.current) {
-      onLogRef.current(message);
-    }
-  }, []);
+  const { addLog } = useLogContext();
   
   const getSuiPrice = useCallback(async (): Promise<number> => {
     setIsLoadingPrice(true);
@@ -49,13 +35,11 @@ export function SuiPriceProvider({
         throw new Error('无法获取SUI价格数据');
       }
       
-      log(`获取SUI实时价格: 1 SUI = $${price} USD`);
+      addLog(`获取SUI实时价格: 1 SUI = $${price} USD`);
       setSuiPrice(price);
       return price;
     } catch (error: any) {
-      if (onLogRef.current) {
-        log(`获取SUI价格失败: ${error.message}，使用默认价格`);
-      }
+      addLog(`获取SUI价格失败: ${error.message}，使用默认价格`);
       // 获取失败时使用默认价格
       const defaultPrice = 0.1;
       setSuiPrice(defaultPrice);
@@ -63,7 +47,7 @@ export function SuiPriceProvider({
     } finally {
       setIsLoadingPrice(false);
     }
-  }, [log]);
+  }, [addLog]);
   
   useEffect(() => {
     // 初次加载获取价格

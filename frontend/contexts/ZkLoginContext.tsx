@@ -2,11 +2,11 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { ZkLoginState } from '@/components/zklogin/types';
-import { AppStorage } from '@/utils/storage';
+import { AppStorage } from '@/utils/StorageService';
 import { useZkLogin as useZkLoginHook } from '@/hooks/useZkLogin';
-import { ZkLoginService } from '@/utils/zkLoginService';
+import { ZkLoginService } from '@/utils/ZkLoginService';
 import { ZkLoginProcessResult } from '@/interfaces/ZkLogin';
-import { useLog } from '@/hooks/useLog';
+import { useLogContext } from '@/contexts/LogContext';
 
 // 新的Context接口，专注于zkLogin技术实现并包含日志功能
 interface ZkLoginContextType {
@@ -20,6 +20,7 @@ interface ZkLoginContextType {
   
   // 日志相关
   logs: string[];
+  addLog: (message: string) => void;
   clearLogs: () => void;
 }
 
@@ -32,23 +33,8 @@ export function ZkLoginProvider({
   children: ReactNode;
   userId?: string;
 }) {
-  // 使用useLog钩子获取日志功能
-  const { logs, addLog, clearLogs } = useLog();
-  
-  // 初始化时设置ZkLoginService的日志回调
-  useEffect(() => {
-    // 设置ZkLoginService的日志回调
-    ZkLoginService.setLogCallback(addLog);
-    
-    // 记录初始化日志
-    addLog("ZkLoginContext已初始化，并设置了日志回调");
-    
-    // 清理函数（如果需要）
-    return () => {
-      // 清除回调 - 使用一个空函数代替null
-      ZkLoginService.setLogCallback(() => {});
-    };
-  }, [addLog]);
+  // 使用共享的日志hook
+  const logHook = useLogContext();
   
   // 使用hook获取基础zkLogin功能，并传入日志回调函数
   const {
@@ -61,7 +47,7 @@ export function ZkLoginProvider({
     initializeZkLogin,
     clearZkLoginState,
     log
-  } = useZkLoginHook(userId, addLog);
+  } = useZkLoginHook(userId);
 
   // 合成状态
   const [state, setState] = useState<ZkLoginState>({
@@ -102,11 +88,11 @@ export function ZkLoginProvider({
       // 强制创建新的临时密钥对
       const generatedNonce = await initializeZkLogin(true);
       if (!generatedNonce) {
-        addLog("无法继续：临时密钥对创建失败");
+        logHook.addLog("无法继续：临时密钥对创建失败");
         throw new Error("临时密钥对创建失败");
       }
 
-      addLog(`zkLogin准备完成，nonce: ${generatedNonce}`);
+      logHook.addLog(`zkLogin准备完成，nonce: ${generatedNonce}`);
       
       // 保存OAuth流程中使用的原始参数，以便后续ZK证明验证使用
       const updatedEphemeralData = AppStorage.getEphemeralKeypair();
@@ -118,7 +104,7 @@ export function ZkLoginProvider({
       
       return generatedNonce;
     } catch (err: any) {
-      addLog(`准备zkLogin失败: ${err.message}`);
+      logHook.addLog(`准备zkLogin失败: ${err.message}`);
       throw err;
     }
   };
@@ -155,7 +141,7 @@ export function ZkLoginProvider({
     // 手动重置所有会话状态
     AppStorage.clearSessionStorage();
     
-    addLog("已完全清除zkLogin状态");
+    logHook.addLog("已完全清除zkLogin状态");
   };
 
   const value: ZkLoginContextType = {
@@ -163,8 +149,9 @@ export function ZkLoginProvider({
     prepareZkLogin,
     // processJwt,
     clearState,
-    logs,
-    clearLogs
+    logs: logHook.logs,
+    addLog: logHook.addLog,
+    clearLogs: logHook.clearLogs
   };
 
   return (

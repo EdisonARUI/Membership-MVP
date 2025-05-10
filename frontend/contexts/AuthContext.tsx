@@ -1,14 +1,15 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react';
-import { useUser } from '@/hooks/use-user';
+import { useUser } from '@/hooks/useUser';
 import { useZkLogin } from '@/contexts/ZkLoginContext';
-import { useLog } from '@/hooks/useLog';
+import { useLogContext } from '@/contexts/LogContext';
 import { createClient } from '@/utils/supabase/client';
-import { AppStorage } from '@/utils/storage';
+import { AppStorage } from '@/utils/StorageService';
 import { saveUserWithWalletAddress, checkWalletAddressSaved, checkDatabasePermissions } from '@/app/actions';
-import { contractService } from '@/utils/contractService';
-import { SuiService } from '@/utils/sui';
+import { contractService } from '@/utils/ZkLoginAuthService';
+import { SuiService } from '@/utils/SuiService';
 import { ZkLoginProcessResult } from '@/interfaces/ZkLogin';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { useZkLoginParams } from '@/hooks/useZkLoginParams';
 
 interface AuthContextType {
   // 状态
@@ -28,7 +29,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { user, isLoading } = useUser();
-  const { addLog } = useLog();
+  const { addLog } = useLogContext();
   const supabase = createClient();
   
   // 使用ZkLoginContext
@@ -40,55 +41,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   const zkLoginAddress = zkLoginState.zkLoginAddress;
   
+  // 使用zkLogin参数Hook
+  const { validateParams, prepareKeypair, getZkLoginParams } = useZkLoginParams();
+  
   // 认证状态
   const [onChainVerified, setOnChainVerified] = useState(false);
   const [checkingVerification, setCheckingVerification] = useState(false);
   
   // 使用引用跟踪是否已经处理
   const processedRef = useRef<{userId?: string, address?: string}>({});
-  
-  // 验证参数
-  const validateParams = useCallback((address: string, userId: string) => {
-    addLog(`用户ID: ${userId}, 类型: ${typeof userId}`);
-    addLog(`zkLogin地址: ${address}`);
-
-    if (!address || !address.startsWith('0x')) {
-      addLog("错误: 无效的zkLogin地址格式");
-      return false;
-    }
-    return true;
-  }, [addLog]);
-
-  // 准备临时密钥对
-  const prepareKeypair = useCallback(() => {
-    const ephemeralKeypair = AppStorage.getEphemeralKeypair();
-    if (!ephemeralKeypair) {
-      addLog("找不到临时密钥对，无法完成链上认证");
-      return null;
-    }
-
-    // 重建密钥对
-    try {
-      return SuiService.recreateKeypairFromStored(ephemeralKeypair.keypair);
-    } catch (error: any) {
-      addLog(`重建密钥对失败: ${error.message}`);
-      return null;
-    }
-  }, [addLog]);
-
-  // 获取zkLogin所需参数
-  const getZkLoginParams = useCallback(() => {
-    const partialSignature = AppStorage.getZkLoginPartialSignature();
-    const userSalt = AppStorage.getZkLoginUserSalt();
-    const decodedJwt = AppStorage.getDecodedJwt();
-    
-    if (!partialSignature || !userSalt || !decodedJwt) {
-      addLog("缺少zkLogin所需参数，无法完成链上认证");
-      return null;
-    }
-    
-    return { partialSignature, userSalt, decodedJwt };
-  }, [addLog]);
 
   // 检查认证状态
   const checkVerificationStatus = useCallback(async (address: string) => {
@@ -111,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [addLog, setOnChainVerified]);
 
   // 注册zkLogin地址
-  const registerAddress = useCallback(async (address: string, keypair: Ed25519Keypair, partialSignature: any, userSalt: string, decodedJwt: any) => {
+  const registerAddress = useCallback(async (address: string, keypair: any, partialSignature: any, userSalt: string, decodedJwt: any) => {
     addLog("开始链上认证: 注册zkLogin地址...");
     
     try {
@@ -137,7 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [addLog]);
 
   // 绑定钱包地址
-  const bindWalletAddress = useCallback(async (address: string, userId: string, keypair: Ed25519Keypair, partialSignature: any, userSalt: string, decodedJwt: any) => {
+  const bindWalletAddress = useCallback(async (address: string, userId: string, keypair: any, partialSignature: any, userSalt: string, decodedJwt: any) => {
     addLog("绑定钱包地址与用户ID...");
     
     // 清理用户ID
@@ -189,10 +150,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!params) return false;
     const { partialSignature, userSalt, decodedJwt } = params;
     
-    // 检查临时密钥对地址
-    const keypairAddress = keypair.getPublicKey().toSuiAddress();
-    addLog(`临时密钥对地址: ${keypairAddress}`);
-    
     // 检查认证状态
     const isVerified = await checkVerificationStatus(address);
 
@@ -208,7 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     return true;
 
-  }, [addLog, validateParams, prepareKeypair, getZkLoginParams, checkVerificationStatus, registerAddress, bindWalletAddress, setOnChainVerified]);
+  }, [addLog, validateParams, prepareKeypair, getZkLoginParams, checkVerificationStatus, bindWalletAddress, setOnChainVerified]);
 
   // 监听用户和地址变化，尝试保存zkLogin地址
   useEffect(() => {
