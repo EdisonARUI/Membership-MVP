@@ -10,7 +10,7 @@
  */
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { Sparkles, Wallet, User, LogOut, Gift } from "lucide-react";
+import { Sparkles, Wallet, User, LogOut, Gift, CreditCard } from "lucide-react";
 import { useUser } from "@/hooks/useUser";
 import { createClient } from "@/utils/supabase/client";
 import { useLogContext } from '@/contexts/LogContext';
@@ -85,8 +85,9 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
               
               <button 
                 onClick={onSubscriptionManagementClick}
-                className="px-4 py-2 text-white hover:text-yellow-400 transition-colors"
+                className="px-4 py-2 text-white hover:text-yellow-400 transition-colors flex items-center"
               >
+                <CreditCard className="h-4 w-4 mr-1" />
                 My Subscription
               </button>
               
@@ -127,13 +128,13 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
                       </p>
                     </div>
                     
-                    <Link 
+                    {/* <Link 
                       href="/profile"
                       className="block px-4 py-2 text-sm text-white hover:bg-slate-700 transition-colors"
                     >
                       <User className="h-4 w-4 inline-block mr-2" />
                       Profile
-                    </Link>
+                    </Link> */}
                     
                     <button
                       onClick={handleLogout}
