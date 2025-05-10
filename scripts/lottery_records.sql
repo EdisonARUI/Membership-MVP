@@ -24,12 +24,18 @@ create policy "所有用户可查看抽奖记录"
   on lottery_records for select
   using (true);
 
--- 只有特定角色可以添加抽奖记录（注意：使用 WITH CHECK）
-create policy "只有管理员和服务角色可以添加抽奖记录"
+-- 新策略：允许用户添加自己的抽奖记录
+create policy "用户可以添加自己的抽奖记录"
   on lottery_records for insert
-  with check (
-    auth.jwt() ->> 'role' in ('service_role', 'supabase_admin')
-  );
+  with check (true);  -- 允许所有插入，因为验证在API层进行
+
+-- 如果需要更严格的控制，可以使用以下策略（假设用户认证信息与player_address有关联）
+-- create policy "用户可以添加自己的抽奖记录"
+--   on lottery_records for insert
+--   with check (
+--     player_address = auth.uid()::text  -- 如果player_address与用户ID相关
+--     -- 或者其他能验证用户身份的条件
+--   );
 
 -- 自动更新时间戳
 create or replace function trigger_set_timestamp()

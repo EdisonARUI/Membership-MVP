@@ -24,7 +24,9 @@ create policy "已登录用户可查询盐值"
   on zklogin_user_salts for select
   using (auth.role() = 'authenticated');
 
--- RLS 策略：允许服务角色插入
+-- ✅ 修复后的插入策略：使用 WITH CHECK 而非 USING
 create policy "服务角色可插入盐值"
   on zklogin_user_salts for insert
-  using (auth.jwt() ->> 'role' in ('service_role', 'supabase_admin', 'authenticated'));
+  with check (
+    auth.jwt() ->> 'role' in ('service_role', 'supabase_admin', 'authenticated')
+  );

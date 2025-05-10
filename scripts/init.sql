@@ -28,6 +28,7 @@ create table if not exists user_subscriptions (
   user_id uuid references auth.users(id) not null,
   plan_id uuid references subscription_plans(id) not null,
   wallet_id uuid references user_wallets(id),
+  contract_object_id text, -- 存储合约中的订阅对象ID
   status text not null, -- 'active', 'canceled', 'expired'
   start_date timestamptz not null,
   end_date timestamptz not null,
@@ -52,9 +53,9 @@ create table if not exists payment_transactions (
 -- 预填充订阅计划
 insert into subscription_plans (name, price, period, features, is_popular)
 values 
-  ('月付', 35, 'monthly', '["基础分析仪表盘", "最多5名团队成员", "2GB存储空间", "邮件支持"]', false),
-  ('季付', 99, 'quarterly', '["高级分析功能", "最多15名团队成员", "10GB存储空间", "优先邮件支持", "API访问权限"]', true),
-  ('年付', 365, 'yearly', '["企业级分析", "无限团队成员", "50GB存储空间", "24/7优先支持", "API访问权限", "自定义集成"]', false)
+  ('月付', 35, 'monthly', '["基础分析仪表盘", "最多5名团队成员", "2GB存储空间", "邮件支持"]'::jsonb, false),
+  ('季付', 99, 'quarterly', '["高级分析功能", "最多15名团队成员", "10GB存储空间", "优先邮件支持", "API访问权限"]'::jsonb, true),
+  ('年付', 365, 'yearly', '["企业级分析", "无限团队成员", "50GB存储空间", "24/7优先支持", "API访问权限", "自定义集成"]'::jsonb, false)
 on conflict do nothing;
 
 -- 启用RLS策略
@@ -109,6 +110,7 @@ create or replace view user_subscription_status as
 select 
   us.id,
   us.user_id,
+  us.contract_object_id,
   sp.name as plan_name,
   sp.period as plan_period,
   us.start_date,
