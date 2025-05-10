@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLogContext } from '@/contexts/LogContext';
-import { LogDisplay } from '@/components/debug/LogDisplay';
+// Temporarily hide LogDisplay for users, but keep for future development debugging
+// import { LogDisplay } from '@/components/debug/LogDisplay';
 import { ZkLoginService } from '@/utils/ZkLoginService';
 
 export default function AuthCallback() {
@@ -91,7 +92,8 @@ export default function AuthCallback() {
         </div>
       </div>
       
-      <LogDisplay />
+      {/* Temporarily hide LogDisplay for users, but keep for future development debugging */}
+      {/* <LogDisplay /> */}
     </div>
   );
 }

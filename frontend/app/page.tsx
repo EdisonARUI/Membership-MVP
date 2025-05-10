@@ -2,7 +2,8 @@
 
 // import { SuiPriceProvider, useSuiPrice } from "@/contexts/SuiPriceContext";
 import DepositDialog from "@/components/deposit/DepositDialog";
-import { LogDisplay } from "@/components/debug/LogDisplay";
+// Temporarily hide LogDisplay for users, but keep for future development debugging
+// import { LogDisplay } from "@/components/debug/LogDisplay";
 import { Header } from "@/components/layout/Header";
 import { SubscriptionPlans } from "@/components/subscription/SubscriptionPlans";
 import { SubscriptionManagementDialog } from "@/components/subscription/SubscriptionManagementDialog";
@@ -84,7 +85,8 @@ function HomeContent() {
           onSubscriptionManagementClick={() => setShowSubscriptionManagement(true)}
         />
         
-        <LogDisplay />
+        {/* Temporarily hide LogDisplay for users, but keep for future development debugging */}
+        {/* <LogDisplay /> */}
         
         <SubscriptionPlans
           plans={subscriptionPlans}
