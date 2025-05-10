@@ -20,6 +20,20 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'Membership MVP',
   description: 'A membership subscription system built with Sui blockchain',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'),
+  openGraph: {
+    title: 'Membership MVP',
+    description: 'A membership subscription system built with Sui blockchain',
+    url: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+    siteName: 'Membership MVP',
+    locale: 'en_US',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Membership MVP',
+    description: 'A membership subscription system built with Sui blockchain',
+  },
 }
 
 /**

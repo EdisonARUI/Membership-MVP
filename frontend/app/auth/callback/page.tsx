@@ -11,7 +11,7 @@
  */
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,7 +25,7 @@ import { ZkLoginService } from '@/utils/ZkLoginService';
  *
  * @returns {JSX.Element} The rendered authentication callback page
  */
-export default function AuthCallback() {
+function AuthCallbackContent() {
   const [status, setStatus] = useState('Processing login...');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -83,6 +83,7 @@ export default function AuthCallback() {
       
       // 4. Redirect to target page
       addLog(`Authentication complete, redirecting to: ${redirectPath}`);
+      sessionStorage.setItem('justLoggedIn', 'true');
       router.push(redirectPath);
     } catch (error: any) {
       console.error('Error during authentication callback:', error);
@@ -114,5 +115,23 @@ export default function AuthCallback() {
       {/* Temporarily hide LogDisplay for users, but keep for future development debugging */}
       {/* <LogDisplay /> */}
     </div>
+  );
+}
+
+export default function AuthCallback() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900">
+        <div className="bg-slate-800 p-8 rounded-lg shadow-xl text-white max-w-md w-full mb-8">
+          <h1 className="text-2xl font-bold mb-4">Loading...</h1>
+          <div className="flex items-center space-x-3 mb-4">
+            <div className="animate-spin rounded-full h-5 w-5 border-2 border-yellow-400 border-t-transparent"></div>
+            <p>Initializing authentication...</p>
+          </div>
+        </div>
+      </div>
+    }>
+      <AuthCallbackContent />
+    </Suspense>
   );
 }
