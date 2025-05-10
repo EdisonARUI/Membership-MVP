@@ -1,19 +1,69 @@
+/**
+ * SubscriptionManagementDialog component provides a modal dialog for managing the user's active subscription.
+ * It allows toggling auto-renewal, canceling, and renewing subscriptions, and displays current subscription status.
+ *
+ * Features:
+ * - Displays current subscription details and status
+ * - Allows toggling auto-renewal, canceling, and renewing subscriptions
+ * - Shows confirmation dialogs for cancel and renew actions
+ * - Integrates with LogContext for logging subscription events
+ */
 import { useState } from "react";
 import { Check, X, RefreshCw, RotateCw } from "lucide-react";
 import { Subscription } from "@/interfaces/Subscription";
 import { useLogContext } from '@/contexts/LogContext';
 
+/**
+ * Props for SubscriptionManagementDialog component
+ */
 interface SubscriptionManagementDialogProps {
+  /**
+   * Whether the dialog is open
+   */
   isOpen: boolean;
+  /**
+   * Callback to close the dialog
+   */
   onClose: () => void;
+  /**
+   * The user's active subscription
+   */
   activeSubscription: Subscription | null;
+  /**
+   * Whether a loading state is active for subscription actions
+   */
   loadingAction: boolean;
+  /**
+   * Callback to refresh subscription data after updates
+   */
   onSubscriptionUpdate: () => void;
+  /**
+   * Callback to toggle auto-renewal
+   * @param subscriptionId - The subscription ID
+   * @param currentAutoRenew - Current auto-renewal status
+   * @returns {Promise<boolean>} Whether the update was successful
+   */
   onToggleAutoRenew: (subscriptionId: string, currentAutoRenew: boolean) => Promise<boolean>;
+  /**
+   * Callback to cancel the subscription
+   * @param subscriptionId - The subscription ID
+   * @returns {Promise<boolean>} Whether the cancellation was successful
+   */
   onCancelSubscription: (subscriptionId: string) => Promise<boolean>;
+  /**
+   * Callback to renew the subscription
+   * @param subscriptionId - The subscription ID
+   * @returns {Promise<boolean>} Whether the renewal was successful
+   */
   onRenewSubscription: (subscriptionId: string) => Promise<boolean>;
 }
 
+/**
+ * SubscriptionManagementDialog component for managing active subscriptions
+ *
+ * @param {SubscriptionManagementDialogProps} props - Component props
+ * @returns {JSX.Element|null} The rendered dialog or null if not open
+ */
 export function SubscriptionManagementDialog({
   isOpen,
   onClose,
@@ -30,23 +80,27 @@ export function SubscriptionManagementDialog({
 
   if (!isOpen) return null;
 
+  /**
+   * Handles toggling auto-renewal for the active subscription
+   */
   const handleToggleAutoRenew = async () => {
     if (!activeSubscription) return;
-    
     try {
       const success = await onToggleAutoRenew(activeSubscription.id, activeSubscription.auto_renew);
       if (success) {
         onSubscriptionUpdate();
       }
     } catch (error: any) {
-      console.error('更新订阅失败:', error);
-      addLog(`操作失败: ${error.message || "更新订阅时发生错误"}`);
+      console.error('Failed to update subscription:', error);
+      addLog(`Operation failed: ${error.message || "Error occurred while updating subscription"}`);
     }
   };
 
+  /**
+   * Handles canceling the active subscription
+   */
   const handleCancelSubscription = async () => {
     if (!activeSubscription) return;
-    
     try {
       const success = await onCancelSubscription(activeSubscription.id);
       if (success) {
@@ -55,14 +109,16 @@ export function SubscriptionManagementDialog({
         onClose();
       }
     } catch (error: any) {
-      console.error('取消订阅失败:', error);
-      addLog(`操作失败: ${error.message || "取消订阅时发生错误"}`);
+      console.error('Failed to cancel subscription:', error);
+      addLog(`Operation failed: ${error.message || "Error occurred while canceling subscription"}`);
     }
   };
   
+  /**
+   * Handles renewing the active subscription
+   */
   const handleRenewSubscription = async () => {
     if (!activeSubscription) return;
-    
     try {
       const success = await onRenewSubscription(activeSubscription.id);
       if (success) {
@@ -70,11 +126,12 @@ export function SubscriptionManagementDialog({
         setShowConfirmRenew(false);
       }
     } catch (error: any) {
-      console.error('续订订阅失败:', error);
-      addLog(`操作失败: ${error.message || "续订订阅时发生错误"}`);
+      console.error('Failed to renew subscription:', error);
+      addLog(`Operation failed: ${error.message || "Error occurred while renewing subscription"}`);
     }
   };
 
+  // Determine if the subscription is expired
   const isExpired = activeSubscription && 
     (activeSubscription.status === 'expired' || new Date(activeSubscription.end_date) < new Date());
 
@@ -83,7 +140,7 @@ export function SubscriptionManagementDialog({
       <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
         <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold">订阅管理</h2>
+            <h2 className="text-xl font-bold">Subscription Management</h2>
             <button onClick={onClose} className="text-slate-400 hover:text-white">
               <X className="h-6 w-6" />
             </button>
@@ -91,22 +148,22 @@ export function SubscriptionManagementDialog({
 
           <div className="space-y-4">
             <div className="p-4 bg-slate-700 rounded-lg">
-              <h3 className="font-medium mb-2">当前订阅</h3>
+              <h3 className="font-medium mb-2">Current Subscription</h3>
               <p className="text-slate-300">
-                {activeSubscription?.plan_name} 计划
+                {activeSubscription?.plan_name} Plan
               </p>
               <p className={`text-sm ${isExpired ? "text-red-400" : "text-slate-400"}`}>
-                {isExpired ? "已过期: " : "到期时间: "}
+                {isExpired ? "Expired: " : "Expires: "}
                 {new Date(activeSubscription?.end_date || "").toLocaleDateString()}
               </p>
               <p className="text-sm text-slate-400 mt-1">
-                状态: 
+                Status: 
                 <span className={`ml-1 ${
                   activeSubscription?.status === 'active' ? "text-green-400" : 
                   activeSubscription?.status === 'canceled' ? "text-red-400" : "text-yellow-400"
                 }`}>
-                  {activeSubscription?.status === 'active' ? "活跃" : 
-                   activeSubscription?.status === 'canceled' ? "已取消" : "已过期"}
+                  {activeSubscription?.status === 'active' ? "Active" : 
+                   activeSubscription?.status === 'canceled' ? "Canceled" : "Expired"}
                 </span>
               </p>
             </div>
@@ -114,9 +171,9 @@ export function SubscriptionManagementDialog({
             {activeSubscription?.status === 'active' && (
               <div className="flex items-center justify-between p-4 bg-slate-700 rounded-lg">
                 <div>
-                  <h3 className="font-medium">自动续订</h3>
+                  <h3 className="font-medium">Auto-Renewal</h3>
                   <p className="text-sm text-slate-400">
-                    {activeSubscription?.auto_renew ? "已开启" : "已关闭"}
+                    {activeSubscription?.auto_renew ? "Enabled" : "Disabled"}
                   </p>
                 </div>
                 <button
@@ -133,12 +190,12 @@ export function SubscriptionManagementDialog({
                   ) : (
                     <Check className="h-4 w-4" />
                   )}
-                  <span>{activeSubscription?.auto_renew ? "关闭" : "开启"}</span>
+                  <span>{activeSubscription?.auto_renew ? "Disable" : "Enable"}</span>
                 </button>
               </div>
             )}
             
-            {/* 续订按钮 */}
+            {/* Renew button */}
             {(isExpired || activeSubscription?.status === 'expired') && (
               <button
                 onClick={() => setShowConfirmRenew(true)}
@@ -150,7 +207,7 @@ export function SubscriptionManagementDialog({
                 ) : (
                   <RotateCw className="h-4 w-4" />
                 )}
-                <span>续订订阅</span>
+                <span>Renew Subscription</span>
               </button>
             )}
 
@@ -163,7 +220,7 @@ export function SubscriptionManagementDialog({
                 {loadingAction ? (
                   <RefreshCw className="h-4 w-4 animate-spin mr-2" />
                 ) : null}
-                取消订阅
+                Cancel Subscription
               </button>
             )}
           </div>
@@ -173,16 +230,16 @@ export function SubscriptionManagementDialog({
       {showConfirmCancel && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
           <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold mb-4">确认取消订阅</h3>
+            <h3 className="text-xl font-bold mb-4">Confirm Cancel Subscription</h3>
             <p className="text-slate-300 mb-6">
-              您确定要取消当前订阅吗？取消后，您将无法继续使用高级功能。
+              Are you sure you want to cancel your current subscription? You will lose access to premium features.
             </p>
             <div className="flex justify-end space-x-4">
               <button
                 onClick={() => setShowConfirmCancel(false)}
                 className="px-4 py-2 bg-slate-600 hover:bg-slate-500 rounded-lg"
               >
-                返回
+                Back
               </button>
               <button
                 onClick={handleCancelSubscription}
@@ -192,7 +249,7 @@ export function SubscriptionManagementDialog({
                 {loadingAction ? (
                   <RefreshCw className="h-4 w-4 animate-spin mr-2" />
                 ) : null}
-                确认取消
+                Confirm Cancel
               </button>
             </div>
           </div>
@@ -202,16 +259,16 @@ export function SubscriptionManagementDialog({
       {showConfirmRenew && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
           <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold mb-4">确认续订</h3>
+            <h3 className="text-xl font-bold mb-4">Confirm Renew Subscription</h3>
             <p className="text-slate-300 mb-6">
-              您确定要续订当前订阅吗？将按原计划价格从您的账户中扣除费用。
+              Are you sure you want to renew your subscription? The original plan price will be charged from your account.
             </p>
             <div className="flex justify-end space-x-4">
               <button
                 onClick={() => setShowConfirmRenew(false)}
                 className="px-4 py-2 bg-slate-600 hover:bg-slate-500 rounded-lg"
               >
-                返回
+                Back
               </button>
               <button
                 onClick={handleRenewSubscription}
@@ -221,7 +278,7 @@ export function SubscriptionManagementDialog({
                 {loadingAction ? (
                   <RefreshCw className="h-4 w-4 animate-spin mr-2" />
                 ) : null}
-                确认续订
+                Confirm Renew
               </button>
             </div>
           </div>

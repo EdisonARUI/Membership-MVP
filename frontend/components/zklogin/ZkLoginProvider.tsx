@@ -1,9 +1,25 @@
+/**
+ * ZkLoginProvider component provides context and methods for zkLogin authentication.
+ * It manages ephemeral keypair preparation, Google authentication, and exposes ready callbacks for parent components.
+ *
+ * Features:
+ * - Prepares zkLogin ephemeral keypair
+ * - Handles Google authentication
+ * - Exposes ready callback with login methods
+ * - Displays current zkLogin status and errors
+ */
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
 import { useZkLogin } from "@/contexts/ZkLoginContext";
 import { ZkLoginMethods, ZkLoginProviderProps } from "@/components/zklogin/types";
 
+/**
+ * ZkLoginProvider component for managing zkLogin authentication and exposing login methods
+ *
+ * @param {ZkLoginProviderProps} props - Component props
+ * @returns {JSX.Element} The rendered provider status panel
+ */
 export default function ZkLoginProvider({ 
   userId, 
   autoInitialize = false, 
@@ -18,6 +34,10 @@ export default function ZkLoginProvider({
   const [hasMounted, setHasMounted] = useState(false);
   const onReadyCalledRef = useRef<boolean>(false);
   
+  /**
+   * Adds a log message to the console and calls the onLog callback if provided
+   * @param message - The log message
+   */
   const addLog = (message: string) => {
     console.log(message);
     if (onLog) {
@@ -25,20 +45,22 @@ export default function ZkLoginProvider({
     }
   };
   
-  // 准备onReady回调方法
+  /**
+   * Prepares the onReady callback with login methods when available
+   */
   useEffect(() => {
     if (onReady && !onReadyCalledRef.current) {
       const methods: ZkLoginMethods = {
         initiateLogin: async () => {
-          addLog("初始化登录...");
+          addLog("Initializing login...");
         },
         handleGoogleAuth: async () => {
-          addLog("开始Google授权...");
+          addLog("Starting Google authentication...");
           try {
             await prepareZkLogin();
-            addLog("zkLogin密钥对已准备");
+            addLog("zkLogin keypair prepared");
           } catch (error: any) {
-            addLog(`准备zkLogin失败: ${error.message}`);
+            addLog(`Failed to prepare zkLogin: ${error.message}`);
           }
         }
       };
@@ -48,20 +70,20 @@ export default function ZkLoginProvider({
     }
   }, [prepareZkLogin, onReady]);
   
-  // 组件挂载标记
+  // Mark component as mounted
   useEffect(() => {
     setHasMounted(true);
   }, []);
   
-  // 使用更小、更专注的组件来呈现内容
+  // Render status panel or error/loading states
   return (
     <div className="mt-4">
       {!hasMounted ? (
         <div />
       ) : zkLoginAddress ? (
         <div className="p-4 bg-slate-700 rounded-lg text-white">
-          <h3 className="text-lg font-bold">已连接到Sui Devnet</h3>
-          <p className="text-sm truncate">地址: {zkLoginAddress}</p>
+          <h3 className="text-lg font-bold">Connected to Sui Devnet</h3>
+          <p className="text-sm truncate">Address: {zkLoginAddress}</p>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -74,7 +96,7 @@ export default function ZkLoginProvider({
             <div className="p-4 bg-slate-700 rounded-lg text-white">
               <div className="flex items-center space-x-2">
                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-yellow-400 border-t-transparent"></div>
-                <span>处理中...</span>
+                <span>Processing...</span>
               </div>
             </div>
           )}

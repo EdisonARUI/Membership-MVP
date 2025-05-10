@@ -1,19 +1,46 @@
+/**
+ * DepositDialog component provides a modal dialog for users to deposit USDT using zkLogin authentication.
+ * It allows users to enter an amount, execute a deposit transaction, and view their deposit history and results.
+ *
+ * Features:
+ * - USDT deposit form with validation
+ * - Displays deposit result and transaction status
+ * - Shows deposit history with total count and amount
+ * - Integrates with DepositContext for state and operations
+ */
 import { useState, useEffect } from 'react';
 import { X, Loader2, CreditCard } from 'lucide-react';
 import { useDeposit } from '@/contexts/DepositContext';
 import { DepositRecord } from '@/interfaces/Deposit';
 
+/**
+ * Props for DepositDialog component
+ */
 interface DepositDialogProps {
+  /**
+   * Whether the dialog is open
+   */
   isOpen: boolean;
+  /**
+   * Callback to close the dialog
+   */
   onClose: () => void;
 }
 
-// 本地UI展示用充值记录类型
+/**
+ * Local UI type for displaying deposit history items
+ */
 interface DepositHistoryItem {
   amount: number;
   time: Date;
 }
 
+/**
+ * DepositDialog component for handling USDT deposits and displaying deposit history
+ *
+ * @param {DepositDialogProps} props - Component props
+ * @returns {JSX.Element|null} The rendered dialog or null if not open
+ */
 export default function DepositDialog({ isOpen, onClose }: DepositDialogProps) {
   const [depositAmount, setDepositAmount] = useState<string>('');
   const { 
@@ -25,7 +52,11 @@ export default function DepositDialog({ isOpen, onClose }: DepositDialogProps) {
     resetResult 
   } = useDeposit();
   
-  // 转换API记录为UI展示格式
+  /**
+   * Converts API deposit records to UI display format
+   * @param {DepositRecord[]} records - Array of deposit records
+   * @returns {DepositHistoryItem[]} Array of formatted history items
+   */
   const convertToHistoryItems = (records: DepositRecord[]): DepositHistoryItem[] => {
     return records.map(record => ({
       amount: record.amount,
@@ -33,7 +64,9 @@ export default function DepositDialog({ isOpen, onClose }: DepositDialogProps) {
     }));
   };
   
-  // 组件加载时获取充值历史
+  /**
+   * Fetches deposit history when the dialog is opened
+   */
   useEffect(() => {
     if (isOpen) {
       fetchDepositRecords(10);
@@ -41,18 +74,19 @@ export default function DepositDialog({ isOpen, onClose }: DepositDialogProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
   
-  // 处理充值按钮点击
+  /**
+   * Handles the deposit button click, validates input, and executes deposit
+   */
   const handleDeposit = async () => {
     if (!depositAmount || isNaN(Number(depositAmount)) || Number(depositAmount) <= 0) {
       return;
     }
-    
     await executeDeposit(depositAmount);
   };
   
   if (!isOpen) return null;
   
-  // 准备显示的历史记录
+  // Prepare history items for display
   const historyItems: DepositHistoryItem[] = depositRecords && depositRecords.records 
     ? convertToHistoryItems(depositRecords.records)
     : [];
@@ -69,11 +103,11 @@ export default function DepositDialog({ isOpen, onClose }: DepositDialogProps) {
         
         <div className="text-center mb-6">
           <CreditCard className="h-12 w-12 text-yellow-400 mx-auto mb-2" />
-          <h2 className="text-2xl font-bold text-white">充值USDT</h2>
-          <p className="text-gray-400 mt-1">使用zkLogin身份验证，在区块链上安全充值</p>
+          <h2 className="text-2xl font-bold text-white">Deposit USDT</h2>
+          <p className="text-gray-400 mt-1">Use zkLogin authentication to securely deposit on-chain</p>
         </div>
         
-        {/* 充值表单 */}
+        {/* Deposit form */}
         <div className="mb-6">
           <div className="relative mb-4">
             <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">$</span>
@@ -81,7 +115,7 @@ export default function DepositDialog({ isOpen, onClose }: DepositDialogProps) {
               type="number"
               value={depositAmount}
               onChange={(e) => setDepositAmount(e.target.value)}
-              placeholder="输入充值金额 (USD)"
+              placeholder="Enter deposit amount (USD)"
               className="w-full py-2 pl-8 pr-4 bg-slate-700 border border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-400"
               disabled={loading}
             />
@@ -99,12 +133,12 @@ export default function DepositDialog({ isOpen, onClose }: DepositDialogProps) {
             {loading ? (
               <Loader2 className="animate-spin h-5 w-5 mx-auto" />
             ) : (
-              "确认充值"
+              "Confirm Deposit"
             )}
           </button>
         </div>
         
-        {/* 充值结果 */}
+        {/* Deposit result */}
         {result && (
           <div className={`p-4 rounded-lg mb-6 ${
             result.success ? 'bg-green-900 bg-opacity-30' : 'bg-red-900 bg-opacity-30'
@@ -113,13 +147,13 @@ export default function DepositDialog({ isOpen, onClose }: DepositDialogProps) {
           </div>
         )}
         
-        {/* 充值历史 */}
+        {/* Deposit history */}
         <div>
           <h3 className="text-lg font-semibold text-white mb-2">
-            我的充值历史
+            My Deposit History
             {depositRecords?.total_count ? (
               <span className="text-sm font-normal text-gray-400 ml-2">
-                共 {depositRecords.total_count} 次，总计 {depositRecords.total_amount ? depositRecords.total_amount / 10**8 : 0} USDT
+                Total {depositRecords.total_count} times, sum {depositRecords.total_amount ? depositRecords.total_amount / 10**8 : 0} USDT
               </span>
             ) : null}
           </h3>
@@ -136,7 +170,7 @@ export default function DepositDialog({ isOpen, onClose }: DepositDialogProps) {
                 </div>
               ))
             ) : (
-              <p className="text-gray-500 text-center py-4">暂无充值记录</p>
+              <p className="text-gray-500 text-center py-4">No deposit records</p>
             )}
           </div>
         </div>

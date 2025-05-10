@@ -1,17 +1,57 @@
+/**
+ * PlanCard component displays a subscription plan card with features, price, and subscribe action.
+ * It highlights the most popular plan and provides UI feedback for hover and loading states.
+ *
+ * Features:
+ * - Displays plan name, price, period, and features
+ * - Highlights most popular plan
+ * - Handles hover, subscribe, and loading states
+ * - Integrates with parent for subscription actions
+ */
 import { Zap, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SubscriptionPlan } from '@/interfaces/Subscription';
 
+/**
+ * Props for PlanCard component
+ */
 type PlanCardProps = {
+  /**
+   * Subscription plan data
+   */
   plan: SubscriptionPlan;
+  /**
+   * Whether the card is currently hovered
+   */
   isHovered: boolean;
+  /**
+   * Mouse enter event handler
+   */
   onMouseEnter: () => void;
+  /**
+   * Mouse leave event handler
+   */
   onMouseLeave: () => void;
+  /**
+   * Subscribe button click handler
+   */
   onSubscribe: () => void;
+  /**
+   * Whether this plan is currently active for the user
+   */
   isActive: boolean;
+  /**
+   * Whether a loading state is active (e.g., subscribing)
+   */
   isLoading: boolean;
 };
 
+/**
+ * PlanCard component for displaying a subscription plan and handling subscribe actions
+ *
+ * @param {PlanCardProps} props - Component props
+ * @returns {JSX.Element|null} The rendered plan card or null if filtered out
+ */
 export function PlanCard({ 
   plan, 
   isHovered, 
@@ -88,6 +128,11 @@ export function PlanCard({
   );
 }
 
+/**
+ * Check icon component for feature list
+ * @param props - SVG props
+ * @returns {JSX.Element} The rendered check icon
+ */
 function Check(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg 

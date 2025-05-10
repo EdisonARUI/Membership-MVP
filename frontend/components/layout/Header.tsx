@@ -1,3 +1,13 @@
+/**
+ * Header component provides the main navigation bar for the application.
+ * It displays user authentication status, navigation links, and quick actions for recharge, subscription, and lottery.
+ *
+ * Features:
+ * - Displays user info and avatar when logged in
+ * - Provides login/logout functionality
+ * - Navigation to recharge, subscription management, and lottery
+ * - Integrates with AuthContext, ZkLoginContext, and DepositContext
+ */
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { Sparkles, Wallet, User, LogOut, Gift } from "lucide-react";
@@ -10,11 +20,26 @@ import LotteryDialog from "../lottery/LotteryDialog";
 import { FcGoogle } from "react-icons/fc";
 import { useDeposit } from "@/contexts/DepositContext";
 
+/**
+ * Props for Header component
+ */
 interface HeaderProps {
+  /**
+   * Callback for recharge button click
+   */
   onRechargeClick: () => void;
+  /**
+   * Callback for subscription management button click
+   */
   onSubscriptionManagementClick: () => void;
 }
 
+/**
+ * Header component for main navigation and user actions
+ *
+ * @param {HeaderProps} props - Component props
+ * @returns {JSX.Element} The rendered header
+ */
 export function Header({ onRechargeClick, onSubscriptionManagementClick }: HeaderProps) {
   const { user } = useUser();
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -22,7 +47,7 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
   const { addLog } = useLogContext();
   const supabase = createClient();
   
-  // 使用AuthContext处理登录逻辑，ZkLoginContext只用于状态获取
+  // Use AuthContext for login logic, ZkLoginContext for state only
   const { handleLogin } = useAuth();
   const { state } = useZkLogin();
   const { zkLoginAddress, loading } = state;
@@ -30,41 +55,46 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
   const [showLotteryDialog, setShowLotteryDialog] = useState(false);
   const { showDepositDialog, setShowDepositDialog } = useDeposit();
 
+  /**
+   * Handles Google login button click, triggers AuthContext login
+   */
   const handleGoogleLogin = async () => {
     try {
-      addLog("开始Google登录流程...");
-      // 调用AuthContext的handleLogin方法
+      addLog("Starting Google login process...");
       await handleLogin();
     } catch (error: any) {
-      addLog(`Google登录失败: ${error.message}`);
+      addLog(`Google login failed: ${error.message}`);
     }
   };
 
+  /**
+   * Handles logout button click, clears local/session storage and logs out from Supabase
+   */
   const handleLogout = async () => {
     try {
-      addLog("开始退出登录...");
+      addLog("Starting logout process...");
       if (typeof window !== 'undefined') {
         localStorage.removeItem('zkLogin_ephemeral');
         localStorage.removeItem('zkLogin_address');
         localStorage.removeItem('zkLogin_proof');
         localStorage.removeItem('zkLogin_signature');
-        
         sessionStorage.removeItem('jwt_already_processed');
         sessionStorage.removeItem('has_checked_jwt');
         sessionStorage.removeItem('pending_jwt');
         sessionStorage.removeItem('oauth_state');
       }
-      
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-      
-      addLog("已成功退出登录");
+      addLog("Successfully logged out");
       window.location.reload();
     } catch (error: any) {
-      addLog(`退出登录失败: ${error.message}`);
+      addLog(`Logout failed: ${error.message}`);
     }
   };
 
+  /**
+   * Handles lottery button click, opens the lottery dialog
+   */
   const handleLotteryClick = () => {
     setShowLotteryDialog(true);
   };
@@ -85,14 +115,14 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
                 className="px-4 py-2 text-white hover:text-yellow-400 transition-colors flex items-center"
               >
                 <Wallet className="h-4 w-4 mr-1" />
-                充值
+                Recharge
               </button>
               
               <button 
                 onClick={onSubscriptionManagementClick}
                 className="px-4 py-2 text-white hover:text-yellow-400 transition-colors"
               >
-                我的订阅
+                My Subscription
               </button>
               
               <button 
@@ -100,7 +130,7 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
                 className="px-4 py-2 text-white hover:text-yellow-400 transition-colors flex items-center"
               >
                 <Gift className="h-4 w-4 mr-1" />
-                抽奖
+                Lottery
               </button>
               
               <div className="relative" ref={userMenuRef}>
@@ -111,7 +141,7 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
                   {user.user_metadata?.avatar_url ? (
                     <img 
                       src={user.user_metadata.avatar_url} 
-                      alt={user.user_metadata?.full_name || "用户头像"} 
+                      alt={user.user_metadata?.full_name || "User Avatar"} 
                       className="w-full h-full object-cover"
                     />
                   ) : (
@@ -137,7 +167,7 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
                       className="block px-4 py-2 text-sm text-white hover:bg-slate-700 transition-colors"
                     >
                       <User className="h-4 w-4 inline-block mr-2" />
-                      个人中心
+                      Profile
                     </Link>
                     
                     <button
@@ -145,7 +175,7 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
                       className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-slate-700 transition-colors"
                     >
                       <LogOut className="h-4 w-4 inline-block mr-2" />
-                      退出登录
+                      Logout
                     </button>
                   </div>
                 )}
@@ -160,7 +190,7 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
               >
                 <FcGoogle size={20} />
                 <span className="text-sm font-medium text-gray-700">
-                  {loading ? "处理中..." : "Continue with Google"}
+                  {loading ? "Processing..." : "Continue with Google"}
                 </span>
               </button>
             </>
