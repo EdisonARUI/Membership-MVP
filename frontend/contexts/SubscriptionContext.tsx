@@ -56,7 +56,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [activeSubscription, setActiveSubscription] = useState<Subscription | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [loadingAction, setLoadingAction] = useState(false);
   const [showSubscriptionManagement, setShowSubscriptionManagement] = useState(false);
 

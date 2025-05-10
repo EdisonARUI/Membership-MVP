@@ -88,9 +88,9 @@ function HomeContent() {
   }
 
   /**
-   * Show empty state if no subscription plans are available
+   * Show empty state only if loading is complete and no plans are available
    */
-  if (!subscriptionPlans || subscriptionPlans.length === 0) {
+  if (!loading && (!subscriptionPlans || subscriptionPlans.length === 0)) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white flex items-center justify-center">
         <div className="text-center p-8 max-w-md">
