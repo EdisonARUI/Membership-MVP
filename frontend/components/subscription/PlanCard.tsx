@@ -1,18 +1,15 @@
-import { Zap } from 'lucide-react';
+import { Zap, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { SubscriptionPlan } from '@/interfaces/Subscription';
 
 type PlanCardProps = {
-  plan: {
-    name: string;
-    price: string;
-    period: string;
-    popular?: boolean;
-  };
+  plan: SubscriptionPlan;
   isHovered: boolean;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   onSubscribe: () => void;
   isActive: boolean;
+  isLoading: boolean;
 };
 
 export function PlanCard({ 
@@ -21,7 +18,8 @@ export function PlanCard({
   onMouseEnter, 
   onMouseLeave, 
   onSubscribe,
-  isActive
+  isActive,
+  isLoading
 }: PlanCardProps) {
   return (
     <div className="flex flex-col">
@@ -31,12 +29,12 @@ export function PlanCard({
           "bg-gradient-to-b from-slate-800 to-slate-900",
           "border border-slate-700 hover:border-slate-500",
           isHovered ? "transform scale-105" : "",
-          plan.popular ? "ring-2 ring-yellow-400" : ""
+          plan.is_popular ? "ring-2 ring-yellow-400" : ""
         )}
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
       >
-        {plan.popular && (
+        {plan.is_popular && (
           <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
             <span className="bg-yellow-400 text-black px-3 py-1 rounded-full text-sm font-medium flex items-center">
               <Zap className="h-4 w-4 mr-1" />
@@ -54,19 +52,50 @@ export function PlanCard({
             </span>
           </div>
         </div>
+        
+        <div className="space-y-2">
+          {plan.features.map((feature, index) => (
+            <div key={index} className="flex items-center text-sm">
+              <Check className="h-4 w-4 text-green-400 mr-2 flex-shrink-0" />
+              <span className="text-slate-300">{feature}</span>
+            </div>
+          ))}
+        </div>
       </div>
       
       <button
         className={cn(
-          "w-full py-3 mt-4 rounded-lg font-semibold transition-all duration-300",
-          plan.popular
+          "w-full py-3 mt-4 rounded-lg font-semibold transition-all duration-300 flex items-center justify-center",
+          isLoading ? "opacity-70 cursor-not-allowed" : "",
+          plan.is_popular
             ? "bg-yellow-400 hover:bg-yellow-300 text-black"
             : "bg-slate-700 hover:bg-slate-600 text-white"
         )}
         onClick={onSubscribe}
+        disabled={isLoading}
       >
+        {isLoading ? (
+          <Loader2 className="h-5 w-5 animate-spin mr-2" />
+        ) : null}
         {isActive ? "切换计划" : "立即开始"}
       </button>
     </div>
+  );
+}
+
+function Check(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg 
+      {...props}
+      xmlns="http://www.w3.org/2000/svg" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    >
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
   );
 }

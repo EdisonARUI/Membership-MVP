@@ -1,29 +1,32 @@
 import { useState } from "react";
-import { Check, X, RefreshCw } from "lucide-react";
-import { createClient } from "@/utils/supabase/client";
-import { useLog } from "@/hooks/useLog";
+import { Check, X, RefreshCw, RotateCw } from "lucide-react";
+import { Subscription } from "@/interfaces/Subscription";
+import { useLogContext } from '@/contexts/LogContext';
 
 interface SubscriptionManagementDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  activeSubscription: any;
+  activeSubscription: Subscription | null;
+  loadingAction: boolean;
   onSubscriptionUpdate: () => void;
   onToggleAutoRenew: (subscriptionId: string, currentAutoRenew: boolean) => Promise<boolean>;
   onCancelSubscription: (subscriptionId: string) => Promise<boolean>;
+  onRenewSubscription: (subscriptionId: string) => Promise<boolean>;
 }
 
 export function SubscriptionManagementDialog({
   isOpen,
   onClose,
   activeSubscription,
+  loadingAction,
   onSubscriptionUpdate,
   onToggleAutoRenew,
   onCancelSubscription,
+  onRenewSubscription,
 }: SubscriptionManagementDialogProps) {
-  const [loadingAction, setLoadingAction] = useState(false);
   const [showConfirmCancel, setShowConfirmCancel] = useState(false);
-  const { addLog } = useLog();
-  const supabase = createClient();
+  const [showConfirmRenew, setShowConfirmRenew] = useState(false);
+  const { addLog } = useLogContext();
 
   if (!isOpen) return null;
 
@@ -31,7 +34,6 @@ export function SubscriptionManagementDialog({
     if (!activeSubscription) return;
     
     try {
-      setLoadingAction(true);
       const success = await onToggleAutoRenew(activeSubscription.id, activeSubscription.auto_renew);
       if (success) {
         onSubscriptionUpdate();
@@ -39,8 +41,6 @@ export function SubscriptionManagementDialog({
     } catch (error: any) {
       console.error('更新订阅失败:', error);
       addLog(`操作失败: ${error.message || "更新订阅时发生错误"}`);
-    } finally {
-      setLoadingAction(false);
     }
   };
 
@@ -48,7 +48,6 @@ export function SubscriptionManagementDialog({
     if (!activeSubscription) return;
     
     try {
-      setLoadingAction(true);
       const success = await onCancelSubscription(activeSubscription.id);
       if (success) {
         onSubscriptionUpdate();
@@ -58,10 +57,26 @@ export function SubscriptionManagementDialog({
     } catch (error: any) {
       console.error('取消订阅失败:', error);
       addLog(`操作失败: ${error.message || "取消订阅时发生错误"}`);
-    } finally {
-      setLoadingAction(false);
     }
   };
+  
+  const handleRenewSubscription = async () => {
+    if (!activeSubscription) return;
+    
+    try {
+      const success = await onRenewSubscription(activeSubscription.id);
+      if (success) {
+        onSubscriptionUpdate();
+        setShowConfirmRenew(false);
+      }
+    } catch (error: any) {
+      console.error('续订订阅失败:', error);
+      addLog(`操作失败: ${error.message || "续订订阅时发生错误"}`);
+    }
+  };
+
+  const isExpired = activeSubscription && 
+    (activeSubscription.status === 'expired' || new Date(activeSubscription.end_date) < new Date());
 
   return (
     <>
@@ -80,42 +95,77 @@ export function SubscriptionManagementDialog({
               <p className="text-slate-300">
                 {activeSubscription?.plan_name} 计划
               </p>
-              <p className="text-sm text-slate-400">
-                到期时间: {activeSubscription?.end_date}
+              <p className={`text-sm ${isExpired ? "text-red-400" : "text-slate-400"}`}>
+                {isExpired ? "已过期: " : "到期时间: "}
+                {new Date(activeSubscription?.end_date || "").toLocaleDateString()}
+              </p>
+              <p className="text-sm text-slate-400 mt-1">
+                状态: 
+                <span className={`ml-1 ${
+                  activeSubscription?.status === 'active' ? "text-green-400" : 
+                  activeSubscription?.status === 'canceled' ? "text-red-400" : "text-yellow-400"
+                }`}>
+                  {activeSubscription?.status === 'active' ? "活跃" : 
+                   activeSubscription?.status === 'canceled' ? "已取消" : "已过期"}
+                </span>
               </p>
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-slate-700 rounded-lg">
-              <div>
-                <h3 className="font-medium">自动续订</h3>
-                <p className="text-sm text-slate-400">
-                  {activeSubscription?.auto_renew ? "已开启" : "已关闭"}
-                </p>
+            {activeSubscription?.status === 'active' && (
+              <div className="flex items-center justify-between p-4 bg-slate-700 rounded-lg">
+                <div>
+                  <h3 className="font-medium">自动续订</h3>
+                  <p className="text-sm text-slate-400">
+                    {activeSubscription?.auto_renew ? "已开启" : "已关闭"}
+                  </p>
+                </div>
+                <button
+                  onClick={handleToggleAutoRenew}
+                  disabled={loadingAction}
+                  className={`px-4 py-2 rounded-lg flex items-center space-x-2 ${
+                    activeSubscription?.auto_renew
+                      ? "bg-green-600 hover:bg-green-700"
+                      : "bg-slate-600 hover:bg-slate-500"
+                  }`}
+                >
+                  {loadingAction ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
+                  <span>{activeSubscription?.auto_renew ? "关闭" : "开启"}</span>
+                </button>
               </div>
+            )}
+            
+            {/* 续订按钮 */}
+            {(isExpired || activeSubscription?.status === 'expired') && (
               <button
-                onClick={handleToggleAutoRenew}
+                onClick={() => setShowConfirmRenew(true)}
                 disabled={loadingAction}
-                className={`px-4 py-2 rounded-lg flex items-center space-x-2 ${
-                  activeSubscription?.auto_renew
-                    ? "bg-green-600 hover:bg-green-700"
-                    : "bg-slate-600 hover:bg-slate-500"
-                }`}
+                className="w-full px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg text-white flex items-center justify-center space-x-2"
               >
                 {loadingAction ? (
                   <RefreshCw className="h-4 w-4 animate-spin" />
                 ) : (
-                  <Check className="h-4 w-4" />
+                  <RotateCw className="h-4 w-4" />
                 )}
-                <span>{activeSubscription?.auto_renew ? "关闭" : "开启"}</span>
+                <span>续订订阅</span>
               </button>
-            </div>
+            )}
 
-            <button
-              onClick={() => setShowConfirmCancel(true)}
-              className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white"
-            >
-              取消订阅
-            </button>
+            {activeSubscription?.status === 'active' && (
+              <button
+                onClick={() => setShowConfirmCancel(true)}
+                disabled={loadingAction}
+                className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white"
+              >
+                {loadingAction ? (
+                  <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                ) : null}
+                取消订阅
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -137,13 +187,41 @@ export function SubscriptionManagementDialog({
               <button
                 onClick={handleCancelSubscription}
                 disabled={loadingAction}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white"
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white flex items-center"
               >
                 {loadingAction ? (
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                ) : (
-                  "确认取消"
-                )}
+                  <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                ) : null}
+                确认取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {showConfirmRenew && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+          <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold mb-4">确认续订</h3>
+            <p className="text-slate-300 mb-6">
+              您确定要续订当前订阅吗？将按原计划价格从您的账户中扣除费用。
+            </p>
+            <div className="flex justify-end space-x-4">
+              <button
+                onClick={() => setShowConfirmRenew(false)}
+                className="px-4 py-2 bg-slate-600 hover:bg-slate-500 rounded-lg"
+              >
+                返回
+              </button>
+              <button
+                onClick={handleRenewSubscription}
+                disabled={loadingAction}
+                className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg text-white flex items-center"
+              >
+                {loadingAction ? (
+                  <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                ) : null}
+                确认续订
               </button>
             </div>
           </div>

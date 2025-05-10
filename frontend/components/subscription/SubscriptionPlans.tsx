@@ -1,16 +1,19 @@
 import { useState } from "react";
 import { Sparkles, Check } from "lucide-react";
 import { PlanCard } from "./PlanCard";
+import { SubscriptionPlan, Subscription } from "@/interfaces/Subscription";
 
 interface SubscriptionPlansProps {
-  plans: any[];
-  activeSubscription: any;
-  onSubscribe: (plan: any) => void;
+  plans: SubscriptionPlan[];
+  activeSubscription: Subscription | null;
+  loadingAction: boolean;
+  onSubscribe: (plan: SubscriptionPlan) => void;
 }
 
 export function SubscriptionPlans({
   plans,
   activeSubscription,
+  loadingAction,
   onSubscribe,
 }: SubscriptionPlansProps) {
   const [hoveredPlan, setHoveredPlan] = useState<number | null>(null);
@@ -38,13 +41,14 @@ export function SubscriptionPlans({
       <div className="grid md:grid-cols-3 gap-8">
         {plans.map((plan, index) => (
           <PlanCard
-            key={plan.name}
+            key={plan.id}
             plan={plan}
             isHovered={hoveredPlan === index}
             onMouseEnter={() => setHoveredPlan(index)}
             onMouseLeave={() => setHoveredPlan(null)}
             onSubscribe={() => onSubscribe(plan)}
             isActive={!!activeSubscription}
+            isLoading={loadingAction}
           />
         ))}
       </div>
