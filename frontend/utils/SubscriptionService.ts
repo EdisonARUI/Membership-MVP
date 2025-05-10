@@ -358,17 +358,27 @@ export class SubscriptionService {
       txb.setSender(zkLoginAddress);
       
       // 1. 获取订阅详情
-      const queryParams = new URLSearchParams();
-      queryParams.append('subscription_id', request.subscription_id);
-      const subscriptionResponse = await api.get<SubscriptionResponse>(
-        `${API_ENDPOINTS.SUBSCRIPTION.STATUS}?${queryParams.toString()}`
-      );
+      const response = await api.get<ApiResponse>(API_ENDPOINTS.SUBSCRIPTION.STATUS);
       
-      if (!subscriptionResponse.success || !subscriptionResponse.data?.subscription) {
-        throw new Error(`获取订阅详情失败: ${subscriptionResponse.error?.message || '未知错误'}`);
+      // 确保数据结构正确
+      if (!response.success) {
+        throw new Error(`获取订阅详情失败: ${response.error?.message || '未知错误'}`);
       }
       
-      const subscription = subscriptionResponse.data.subscription;
+      // 将返回数据转换为标准格式
+      const subscriptionsData = response.data as SubscriptionsResponse;
+      if (!subscriptionsData.subscriptions || !Array.isArray(subscriptionsData.subscriptions)) {
+        throw new Error('获取订阅详情失败: 返回数据格式不正确');
+      }
+      
+      // 从返回的订阅列表中找到目标订阅
+      const subscription = subscriptionsData.subscriptions.find(
+        (sub: Subscription) => sub.id === request.subscription_id
+      );
+      
+      if (!subscription) {
+        throw new Error('未找到指定的订阅');
+      }
       
       // 2. 检查合约对象ID是否存在
       if (!subscription.contract_object_id) {

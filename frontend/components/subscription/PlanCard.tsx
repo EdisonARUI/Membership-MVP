@@ -21,6 +21,11 @@ export function PlanCard({
   isActive,
   isLoading
 }: PlanCardProps) {
+  // Skip rendering test plans
+  if (plan.name.toLowerCase().includes('test')) {
+    return null;
+  }
+  
   return (
     <div className="flex flex-col">
       <div
@@ -38,7 +43,7 @@ export function PlanCard({
           <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
             <span className="bg-yellow-400 text-black px-3 py-1 rounded-full text-sm font-medium flex items-center">
               <Zap className="h-4 w-4 mr-1" />
-              最受欢迎
+              Most Popular
             </span>
           </div>
         )}
@@ -46,9 +51,9 @@ export function PlanCard({
         <div className="text-center mb-8">
           <h3 className="text-xl font-semibold mb-2">{plan.name}</h3>
           <div className="flex items-center justify-center">
-            <span className="text-4xl font-bold">{plan.price}</span>
+            <span className="text-4xl font-bold">${plan.price}</span>
             <span className="text-slate-400 ml-2">
-              {plan.period === 'monthly' ? '每月' : plan.period === 'quarterly' ? '每季度' : '每年'}
+              {plan.period === 'monthly' ? 'Monthly' : plan.period === 'quarterly' ? 'Quarterly' : 'Yearly'}
             </span>
           </div>
         </div>
@@ -77,7 +82,7 @@ export function PlanCard({
         {isLoading ? (
           <Loader2 className="h-5 w-5 animate-spin mr-2" />
         ) : null}
-        {isActive ? "切换计划" : "立即开始"}
+        {isActive ? "Switch Plan" : "Get Started"}
       </button>
     </div>
   );
