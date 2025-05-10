@@ -6,9 +6,9 @@ import { toB64 } from '@mysten/sui/utils';
 import { API_ENDPOINTS } from '../app/api/endpoints';
 import { api } from '../app/api/clients';
 import { AppError } from '../interfaces/Error';
-
+import { SUI_RPC_URL } from '@/config/client';
 // Sui Devnet客户端
-const FULLNODE_URL = 'https://fullnode.devnet.sui.io';
+const FULLNODE_URL = SUI_RPC_URL;
 export const suiClient = new SuiClient({ url: FULLNODE_URL });
 
 // 最大Epoch增量

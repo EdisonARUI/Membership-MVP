@@ -25,7 +25,10 @@ const StorageKeys = {
   LOGIN_INITIATED: 'login_initiated',
   ZKLOGIN_ORIGINAL_NONCE: 'zklogin_original_nonce',
   ZKLOGIN_ORIGINAL_MAX_EPOCH: 'zklogin_original_maxEpoch',
-  ZKLOGIN_ORIGINAL_RANDOMNESS: 'zklogin_original_randomness'
+  ZKLOGIN_ORIGINAL_RANDOMNESS: 'zklogin_original_randomness',
+  
+  // 日志相关
+  APP_LOGS: 'app_logs'
 };
 
 // 存储工具类 - 统一管理所有存储操作
@@ -288,6 +291,39 @@ export class AppStorage {
     return this.getFromSessionStorage(StorageKeys.ZKLOGIN_ORIGINAL_RANDOMNESS);
   }
 
+  // 日志相关存储 ======================
+  
+  /**
+   * 获取应用日志
+   */
+  static getLogs(): string[] {
+    const logs = this.getFromLocalStorage(StorageKeys.APP_LOGS);
+    return logs || [];
+  }
+
+  /**
+   * 设置应用日志
+   */
+  static setLogs(logs: string[]): void {
+    this.setToLocalStorage(StorageKeys.APP_LOGS, logs);
+  }
+
+  /**
+   * 添加单条日志
+   */
+  static addLog(log: string): void {
+    const logs = this.getLogs();
+    logs.push(log);
+    this.setLogs(logs);
+  }
+
+  /**
+   * 清除所有日志
+   */
+  static clearLogs(): void {
+    this.setLogs([]);
+  }
+
   // 清除存储方法 ======================
   
   /**
@@ -346,6 +382,7 @@ export class AppStorage {
     this.clearZkLoginStorage();
     this.clearAuthStorage();
     this.clearSessionStorage();
+    localStorage.removeItem(StorageKeys.APP_LOGS);
     console.log("[Storage] 已清除所有存储");
   }
 

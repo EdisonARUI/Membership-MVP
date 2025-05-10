@@ -1,6 +1,6 @@
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { AppStorage } from './storage';
-import { SuiService } from './sui';
+import { AppStorage } from './StorageService';
+import { SuiService } from './SuiService';
 import { 
   PartialZkLoginSignature, 
   ZkProofRequestBody,

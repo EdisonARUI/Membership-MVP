@@ -1,12 +1,13 @@
-import { SuiClient, SuiTransactionBlockResponse } from '@mysten/sui/client';
+import { SuiClient } from '@mysten/sui/client';
 import { Transaction } from '@mysten/sui/transactions';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { CONTRACT_ADDRESSES } from '../config/contracts';
 import { PartialZkLoginSignature } from '@/interfaces/ZkLogin';
-import { useZkLoginTransactions } from '@/hooks/useZkloginTransactions';
+import { useZkLoginTransactions } from '@/hooks/useZkLoginTransactions';
+import { SUI_RPC_URL } from '@/config/client';
 
 // Sui客户端配置
-const FULLNODE_URL = 'https://fullnode.devnet.sui.io';
+const FULLNODE_URL = SUI_RPC_URL;
 export const suiClient = new SuiClient({ url: FULLNODE_URL });
 
 
@@ -38,12 +39,12 @@ export class ContractService {
       const txb = new Transaction();
       
       // 调用register_zk_address方法
-      txb.moveCall({
-        target: `${CONTRACT_ADDRESSES.AUTHENTICATION.PACKAGE_ID}::${CONTRACT_ADDRESSES.AUTHENTICATION.MODULE_NAME}::register_zk_address`,
-        arguments: [
-          txb.object(CONTRACT_ADDRESSES.AUTHENTICATION.REGISTRY_OBJECT_ID)
-        ]
-      });
+        txb.moveCall({
+          target: `${CONTRACT_ADDRESSES.AUTHENTICATION.PACKAGE_ID}::${CONTRACT_ADDRESSES.AUTHENTICATION.MODULE_NAME}::register_zk_address`,
+          arguments: [
+            txb.object(CONTRACT_ADDRESSES.AUTHENTICATION.REGISTRY_OBJECT_ID)
+          ]
+        });
       
       // 使用zkLogin签名并执行交易
       const { signAndExecuteTransaction } = useZkLoginTransactions();
@@ -60,13 +61,13 @@ export class ContractService {
         
         console.log("交易完整结果:", JSON.stringify(result, null, 2));
         
-        if (result.effects?.status?.status === "success") {
-          console.log("register_zk_address交易执行成功");
-          return {
-            success: true,
-            txId: result.digest
-          };
-        } else {
+      if (result.effects?.status?.status === "success") {
+        console.log("register_zk_address交易执行成功");
+        return {
+          success: true,
+          txId: result.digest
+        };
+      } else {
           console.error("交易执行失败详情:", JSON.stringify(result.effects, null, 2));
           
           // 提取更详细的错误信息
@@ -130,9 +131,9 @@ export class ContractService {
     try {
       const txb = new Transaction();
       txb.moveCall({
-        target: `${CONTRACT_ADDRESSES.AUTHENTICATION.PACKAGE_ID}::${CONTRACT_ADDRESSES.AUTHENTICATION.MODULE_NAME}::is_address_verified`,
+          target: `${CONTRACT_ADDRESSES.AUTHENTICATION.PACKAGE_ID}::${CONTRACT_ADDRESSES.AUTHENTICATION.MODULE_NAME}::is_address_verified`,
         arguments: [txb.object(CONTRACT_ADDRESSES.AUTHENTICATION.REGISTRY_OBJECT_ID), txb.pure.address(address)]
-      });
+        });
       
       const result = await this.client.devInspectTransactionBlock({
         sender: address,
@@ -155,8 +156,8 @@ export class ContractService {
       return { verified: false, error: "无法解析返回值" };
     } catch (error: any) {
       console.error("检查地址验证状态失败:", error);
-      return { 
-        verified: false, 
+      return {
+        verified: false,
         error: `检查地址验证失败: ${error.message || JSON.stringify(error)}`
       };
     }
@@ -220,21 +221,21 @@ export class ContractService {
           userSalt,
           decodedJwt
         );
-        
-        console.log("交易执行结果:", result);
-        
-        // 检查交易是否成功
-        if (result.effects?.status?.status === "success") {
-          console.log("交易执行成功");
-          return {
-            success: true,
-            txId: result.digest
-          };
-        } else {
-          console.error("交易执行失败:", result.effects?.status);
-          return {
-            success: false,
-            error: `交易执行失败: ${result.effects?.status?.error || "未知错误"}`
+      
+      console.log("交易执行结果:", result);
+      
+      // 检查交易是否成功
+      if (result.effects?.status?.status === "success") {
+        console.log("交易执行成功");
+        return {
+          success: true,
+          txId: result.digest
+        };
+      } else {
+        console.error("交易执行失败:", result.effects?.status);
+        return {
+          success: false,
+          error: `交易执行失败: ${result.effects?.status?.error || "未知错误"}`
           };
         }
       } catch (executeError: any) {
