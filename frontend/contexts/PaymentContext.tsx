@@ -1,9 +1,17 @@
+/**
+ * Context for managing payment operations
+ * Provides functionality for handling subscription payments and payment history
+ */
 import { createContext, useContext, useState, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useLogContext } from '@/contexts/LogContext';
 import { createClient } from '@/utils/supabase/client';
 
+/**
+ * Interface defining the shape of the payment context
+ * Contains state and methods for payment operations
+ */
 interface PaymentContextType {
   showPaymentDialog: boolean;
   setShowPaymentDialog: (show: boolean) => void;
@@ -16,6 +24,13 @@ interface PaymentContextType {
 
 const PaymentContext = createContext<PaymentContextType | undefined>(undefined);
 
+/**
+ * Provider component for payment context
+ * Manages payment operations and state
+ * 
+ * @param {Object} props - Component props
+ * @param {ReactNode} props.children - Child components
+ */
 export function PaymentProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { createSubscription } = useSubscription();
@@ -27,6 +42,12 @@ export function PaymentProvider({ children }: { children: ReactNode }) {
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
+  /**
+   * Fetches payment history for the current user
+   * Retrieves payment records from Supabase
+   * 
+   * @returns {Promise<void>}
+   */
   const fetchPaymentHistory = async () => {
     if (!user) return;
     
@@ -41,13 +62,19 @@ export function PaymentProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
       setPaymentHistory(data || []);
     } catch (error: any) {
-      console.error('获取支付记录失败:', error);
-      addLog(`获取支付记录失败: ${error.message}`);
+      console.error('Failed to fetch payment records:', error);
+      addLog(`Failed to fetch payment records: ${error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
+  /**
+   * Handles payment confirmation
+   * Creates subscription and updates payment history
+   * 
+   * @returns {Promise<void>}
+   */
   const handlePaymentConfirm = async () => {
     if (!selectedPlan || !user) return;
 
@@ -62,13 +89,13 @@ export function PaymentProvider({ children }: { children: ReactNode }) {
       if (success) {
         setShowPaymentDialog(false);
         await fetchPaymentHistory();
-        addLog('支付成功');
+        addLog('Payment successful');
       } else {
-        addLog('支付失败');
+        addLog('Payment failed');
       }
     } catch (error: any) {
-      console.error('支付失败:', error);
-      addLog(`支付失败: ${error.message}`);
+      console.error('Payment failed:', error);
+      addLog(`Payment failed: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -91,6 +118,13 @@ export function PaymentProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Hook for accessing payment context
+ * Must be used within a PaymentProvider
+ * 
+ * @returns {PaymentContextType} Payment context value
+ * @throws {Error} If used outside of PaymentProvider
+ */
 export function usePayment() {
   const context = useContext(PaymentContext);
   if (context === undefined) {

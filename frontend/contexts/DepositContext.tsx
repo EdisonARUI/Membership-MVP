@@ -1,3 +1,7 @@
+/**
+ * Context for managing deposit operations
+ * Provides functionality for handling USDT deposits and deposit record management
+ */
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { useZkLoginParams } from '@/hooks/useZkLoginParams';
 import { useLogContext } from '@/contexts/LogContext';
@@ -7,6 +11,10 @@ import { useUser } from '@/hooks/useUser';
 import { useZkLogin } from './ZkLoginContext';
 import { toast } from 'react-hot-toast';
 
+/**
+ * Interface defining the shape of the deposit context
+ * Contains state and methods for deposit operations
+ */
 interface DepositContextType {
   loading: boolean;
   result: {
@@ -25,6 +33,13 @@ interface DepositContextType {
 
 const DepositContext = createContext<DepositContextType | undefined>(undefined);
 
+/**
+ * Provider component for deposit context
+ * Manages deposit operations and state
+ * 
+ * @param {Object} props - Component props
+ * @param {ReactNode} props.children - Child components
+ */
 export function DepositProvider({ children }: { children: ReactNode }) {
   const { addLog } = useLogContext();
   const { user } = useUser();
@@ -45,6 +60,13 @@ export function DepositProvider({ children }: { children: ReactNode }) {
   
   const depositService = new DepositService();
 
+  /**
+   * Fetches deposit records for the current user
+   * Implements throttling to prevent excessive API calls
+   * 
+   * @param {number} limit - Maximum number of records to fetch
+   * @returns {Promise<void>}
+   */
   const fetchDepositRecords = useCallback(async (limit: number = 10): Promise<void> => {
     try {
       const now = Date.now();
@@ -59,19 +81,27 @@ export function DepositProvider({ children }: { children: ReactNode }) {
           setDepositRecords(response);
           setLastUpdated(now);
         } else {
-          addLog(`获取充值记录失败: ${response.error}`);
+          addLog(`Failed to fetch deposit records: ${response.error}`);
           setDepositRecords(null);
         }
       }
     } catch (error: any) {
-      addLog(`获取充值记录异常: ${error.message}`);
+      addLog(`Error fetching deposit records: ${error.message}`);
       setDepositRecords(null);
-      toast.error(`获取充值记录失败: ${error.message}`);
+      toast.error(`Failed to fetch deposit records: ${error.message}`);
     }
   }, [zkLoginAddress, depositService, addLog, lastUpdated]);
   
+  /**
+   * Executes a deposit operation
+   * Handles USDT token minting and transaction signing
+   * 
+   * @param {string} usdAmount - Amount in USD to deposit
+   * @returns {Promise<DepositResponse|null>} Deposit operation result
+   */
   const executeDeposit = useCallback(async (usdAmount: string): Promise<DepositResponse | null> => {
     if (!user || !zkLoginAddress) {
+      toast.error('Please login and complete zkLogin authentication first');
       toast.error('请先登录并完成zkLogin认证');
       return null;
     }

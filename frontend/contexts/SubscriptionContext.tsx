@@ -1,3 +1,7 @@
+/**
+ * Context for managing subscription operations
+ * Provides functionality for subscription management and plan handling
+ */
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { useZkLogin } from './ZkLoginContext';
@@ -12,6 +16,10 @@ import {
 } from '@/interfaces/Subscription';
 import { SubscriptionService } from '@/utils/SubscriptionService';
 
+/**
+ * Interface defining the shape of the subscription context
+ * Contains state and methods for subscription operations
+ */
 interface SubscriptionContextType {
   subscriptions: Subscription[];
   plans: SubscriptionPlan[];
@@ -30,6 +38,13 @@ interface SubscriptionContextType {
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
 
+/**
+ * Provider component for subscription context
+ * Manages subscription operations and state
+ * 
+ * @param {Object} props - Component props
+ * @param {ReactNode} props.children - Child components
+ */
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { state: zkLoginState } = useZkLogin();
@@ -45,7 +60,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [loadingAction, setLoadingAction] = useState(false);
   const [showSubscriptionManagement, setShowSubscriptionManagement] = useState(false);
 
-  // 获取订阅计划 - 不需要用户登录
+  // Fetch subscription plans - no user login required
   useEffect(() => {
     const loadPlans = async () => {
       await fetchPlans();
@@ -53,14 +68,19 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     loadPlans();
   }, []);
 
-  // 获取用户订阅 - 需要用户登录
+  // Fetch user subscriptions - requires user login
   useEffect(() => {
     if (user && zkLoginAddress) {
       fetchSubscriptions();
     }
   }, [user, zkLoginAddress]);
 
-  // 获取用户订阅
+  /**
+   * Fetches user subscriptions
+   * Retrieves subscription status and active subscription
+   * 
+   * @returns {Promise<void>}
+   */
   const fetchSubscriptions = async () => {
     try {
       setLoading(true);
@@ -70,18 +90,23 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         setSubscriptions(response.subscriptions || []);
         setActiveSubscription(response.active_subscription || null);
       } else {
-        toast.error(`获取订阅信息失败: ${response.error}`);
-        addLog(`错误: 获取订阅信息失败 - ${response.error}`);
+        toast.error(`Failed to fetch subscription information: ${response.error}`);
+        addLog(`Error: Failed to fetch subscription information - ${response.error}`);
       }
     } catch (error: any) {
-      console.error('获取订阅信息失败:', error);
-      addLog(`错误: 获取订阅信息失败 - ${error.message}`);
+      console.error('Failed to fetch subscription information:', error);
+      addLog(`Error: Failed to fetch subscription information - ${error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // 获取订阅计划
+  /**
+   * Fetches subscription plans
+   * Retrieves available subscription plans
+   * 
+   * @returns {Promise<void>}
+   */
   const fetchPlans = async () => {
     try {
       setLoading(true);
@@ -90,18 +115,23 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       if (response.success) {
         setPlans(response.plans || []);
       } else {
-        toast.error(`获取订阅计划失败: ${response.error}`);
-        addLog(`错误: 获取订阅计划失败 - ${response.error}`);
+        toast.error(`Failed to fetch subscription plans: ${response.error}`);
+        addLog(`Error: Failed to fetch subscription plans - ${response.error}`);
       }
     } catch (error: any) {
-      console.error('获取订阅计划失败:', error);
-      addLog(`错误: 获取订阅计划失败 - ${error.message}`);
+      console.error('Failed to fetch subscription plans:', error);
+      addLog(`Error: Failed to fetch subscription plans - ${error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // 处理订阅按钮点击
+  /**
+   * Handles subscription button click
+   * Initiates subscription creation process
+   * 
+   * @param {SubscriptionPlan} plan - Selected subscription plan
+   */
   const handleSubscribeClick = async (plan: SubscriptionPlan) => {
     if (!user) {
       window.location.href = '/sign-in';
@@ -109,34 +139,34 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     }
     
     if (!zkLoginAddress) {
-      toast.error('请先完成zkLogin认证');
+      toast.error('Please complete zkLogin authentication first');
       return;
     }
     
     try {
       setLoadingAction(true);
-      addLog(`开始创建订阅: ${plan.name}`);
+      addLog(`Starting subscription creation: ${plan.name}`);
       
-      // 准备zkLogin参数
+      // Prepare zkLogin parameters
       const keypair = prepareKeypair();
       if (!keypair) {
-        throw new Error('无法获取临时密钥对');
+        throw new Error('Unable to get ephemeral keypair');
       }
       
       const params = getZkLoginParams();
       if (!params) {
-        throw new Error('无法获取zkLogin参数');
+        throw new Error('Unable to get zkLogin parameters');
       }
       
       const { partialSignature, userSalt, decodedJwt } = params;
       
-      // 创建订阅请求
+      // Create subscription request
       const request: CreateSubscriptionRequest = {
         plan_id: plan.id,
         auto_renew: true
       };
       
-      // 调用订阅服务
+      // Call subscription service
       const result = await subscriptionService.createSubscription(
         request,
         zkLoginAddress,
@@ -147,24 +177,31 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       );
       
       if (result.success) {
-        toast.success('订阅创建成功');
-        addLog(`订阅创建成功: ${plan.name}`);
+        toast.success('Subscription created successfully');
+        addLog(`Subscription created successfully: ${plan.name}`);
         await fetchSubscriptions();
         setShowSubscriptionManagement(true);
       } else {
-        toast.error(`订阅创建失败: ${result.error}`);
-        addLog(`订阅创建失败: ${result.error}`);
+        toast.error(`Failed to create subscription: ${result.error}`);
+        addLog(`Failed to create subscription: ${result.error}`);
       }
     } catch (error: any) {
-      console.error('创建订阅失败:', error);
-      toast.error(`创建订阅失败: ${error.message}`);
-      addLog(`错误: 创建订阅失败 - ${error.message}`);
+      console.error('Failed to create subscription:', error);
+      toast.error(`Failed to create subscription: ${error.message}`);
+      addLog(`Error: Failed to create subscription - ${error.message}`);
     } finally {
       setLoadingAction(false);
     }
   };
 
-  // 切换自动续订
+  /**
+   * Toggles subscription auto-renewal
+   * Updates auto-renewal status for a subscription
+   * 
+   * @param {string} subscriptionId - ID of the subscription to update
+   * @param {boolean} currentAutoRenew - Current auto-renewal status
+   * @returns {Promise<boolean>} Whether the update was successful
+   */
   const handleToggleAutoRenew = async (subscriptionId: string, currentAutoRenew: boolean) => {
     try {
       setLoadingAction(true);
@@ -175,50 +212,56 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       });
       
       if (result.success) {
-        toast.success(currentAutoRenew ? '已关闭自动续订' : '已开启自动续订');
-        addLog(currentAutoRenew ? '已关闭自动续订' : '已开启自动续订');
+        toast.success(currentAutoRenew ? 'Auto-renewal disabled' : 'Auto-renewal enabled');
+        addLog(currentAutoRenew ? 'Auto-renewal disabled' : 'Auto-renewal enabled');
         await fetchSubscriptions();
         return true;
       } else {
-        toast.error(`更新自动续订失败: ${result.error}`);
-        addLog(`更新自动续订失败: ${result.error}`);
+        toast.error(`Failed to update auto-renewal: ${result.error}`);
+        addLog(`Failed to update auto-renewal: ${result.error}`);
         return false;
       }
     } catch (error: any) {
-      console.error('更新自动续订失败:', error);
-      toast.error(`更新自动续订失败: ${error.message}`);
-      addLog(`错误: 更新自动续订失败 - ${error.message}`);
+      console.error('Failed to update auto-renewal:', error);
+      toast.error(`Failed to update auto-renewal: ${error.message}`);
+      addLog(`Error: Failed to update auto-renewal - ${error.message}`);
       return false;
     } finally {
       setLoadingAction(false);
     }
   };
 
-  // 取消订阅
+  /**
+   * Cancels a subscription
+   * Handles subscription cancellation process
+   * 
+   * @param {string} subscriptionId - ID of the subscription to cancel
+   * @returns {Promise<boolean>} Whether the cancellation was successful
+   */
   const handleCancelSubscription = async (subscriptionId: string) => {
     if (!zkLoginAddress) {
-      toast.error('请先完成zkLogin认证');
+      toast.error('Please complete zkLogin authentication first');
       return false;
     }
     
     try {
       setLoadingAction(true);
-      addLog(`开始取消订阅: ${subscriptionId}`);
+      addLog(`Starting subscription cancellation: ${subscriptionId}`);
       
-      // 准备zkLogin参数
+      // Prepare zkLogin parameters
       const keypair = prepareKeypair();
       if (!keypair) {
-        throw new Error('无法获取临时密钥对');
+        throw new Error('Unable to get ephemeral keypair');
       }
       
       const params = getZkLoginParams();
       if (!params) {
-        throw new Error('无法获取zkLogin参数');
+        throw new Error('Unable to get zkLogin parameters');
       }
       
       const { partialSignature, userSalt, decodedJwt } = params;
       
-      // 取消订阅请求
+      // Cancel subscription request
       const result = await subscriptionService.cancelSubscription(
         { subscription_id: subscriptionId },
         zkLoginAddress,
@@ -229,56 +272,62 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       );
       
       if (result.success) {
-        toast.success('订阅已取消');
-        addLog('订阅已取消');
+        toast.success('Subscription cancelled');
+        addLog('Subscription cancelled');
         await fetchSubscriptions();
         setShowSubscriptionManagement(false);
         return true;
       } else {
-        toast.error(`取消订阅失败: ${result.error}`);
-        addLog(`取消订阅失败: ${result.error}`);
+        toast.error(`Failed to cancel subscription: ${result.error}`);
+        addLog(`Failed to cancel subscription: ${result.error}`);
         return false;
       }
     } catch (error: any) {
-      console.error('取消订阅失败:', error);
-      toast.error(`取消订阅失败: ${error.message}`);
-      addLog(`错误: 取消订阅失败 - ${error.message}`);
+      console.error('Failed to cancel subscription:', error);
+      toast.error(`Failed to cancel subscription: ${error.message}`);
+      addLog(`Error: Failed to cancel subscription - ${error.message}`);
       return false;
     } finally {
       setLoadingAction(false);
     }
   };
 
-  // 续订订阅
+  /**
+   * Renews a subscription
+   * Handles subscription renewal process
+   * 
+   * @param {string} subscriptionId - ID of the subscription to renew
+   * @returns {Promise<boolean>} Whether the renewal was successful
+   */
   const handleRenewSubscription = async (subscriptionId: string) => {
     if (!zkLoginAddress) {
-      toast.error('请先完成zkLogin认证');
+      toast.error('Please complete zkLogin authentication first');
       return false;
     }
     
     try {
       setLoadingAction(true);
-      addLog(`开始续订订阅: ${subscriptionId}`);
+      addLog(`Starting subscription renewal: ${subscriptionId}`);
       
-      // 准备zkLogin参数
+      // Prepare zkLogin parameters
       const keypair = prepareKeypair();
       if (!keypair) {
-        throw new Error('无法获取临时密钥对');
+        throw new Error('Unable to get ephemeral keypair');
       }
       
       const params = getZkLoginParams();
       if (!params) {
-        throw new Error('无法获取zkLogin参数');
+        throw new Error('Unable to get zkLogin parameters');
       }
       
       const { partialSignature, userSalt, decodedJwt } = params;
       
-      // 续订请求
+      // Renew request
       const request: RenewSubscriptionRequest = {
         subscription_id: subscriptionId
       };
       
-      // 调用订阅服务
+      // Call subscription service
       const result = await subscriptionService.renewSubscription(
         request,
         zkLoginAddress,
@@ -289,19 +338,19 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       );
       
       if (result.success) {
-        toast.success('订阅续订成功');
-        addLog('订阅续订成功');
+        toast.success('Subscription renewed successfully');
+        addLog('Subscription renewed successfully');
         await fetchSubscriptions();
         return true;
       } else {
-        toast.error(`订阅续订失败: ${result.error}`);
-        addLog(`订阅续订失败: ${result.error}`);
+        toast.error(`Failed to renew subscription: ${result.error}`);
+        addLog(`Failed to renew subscription: ${result.error}`);
         return false;
       }
     } catch (error: any) {
-      console.error('续订订阅失败:', error);
-      toast.error(`续订订阅失败: ${error.message}`);
-      addLog(`错误: 续订订阅失败 - ${error.message}`);
+      console.error('Failed to renew subscription:', error);
+      toast.error(`Failed to renew subscription: ${error.message}`);
+      addLog(`Error: Failed to renew subscription - ${error.message}`);
       return false;
     } finally {
       setLoadingAction(false);
@@ -331,6 +380,13 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Hook for accessing subscription context
+ * Must be used within a SubscriptionProvider
+ * 
+ * @returns {SubscriptionContextType} Subscription context value
+ * @throws {Error} If used outside of SubscriptionProvider
+ */
 export function useSubscriptionContext() {
   const context = useContext(SubscriptionContext);
   if (context === undefined) {

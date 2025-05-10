@@ -1,16 +1,49 @@
+/**
+ * SuiPriceContext provides real-time SUI price data and related operations.
+ * It fetches the SUI price from an external API, manages loading state, and logs price fetch events.
+ *
+ * Features:
+ * - Fetches SUI price from CoinGecko API
+ * - Provides loading state for price fetch operations
+ * - Logs price fetch results and errors
+ * - Updates price at regular intervals
+ */
 'use client';
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useLogContext } from '@/contexts/LogContext';
 
+/**
+ * SuiPriceContextType defines the shape of the SUI price context, including state and operations.
+ */
 interface SuiPriceContextType {
+  /**
+   * The current SUI price in USD, or null if not available
+   */
   suiPrice: number | null;
+  /**
+   * Indicates if the price is currently being loaded
+   */
   isLoadingPrice: boolean;
+  /**
+   * Fetches the latest SUI price from the API
+   * @returns {Promise<number>} The fetched SUI price
+   */
   getSuiPrice: () => Promise<number>;
 }
 
+/**
+ * SuiPriceContext provides the SUI price state and operations to consumers
+ */
 const SuiPriceContext = createContext<SuiPriceContextType | undefined>(undefined);
 
+/**
+ * SuiPriceProvider supplies the SUI price context to its children
+ * Fetches and updates the SUI price at regular intervals
+ *
+ * @param {Object} props - Component props
+ * @param {ReactNode} props.children - Child components
+ */
 export function SuiPriceProvider({ 
   children
 }: { 
@@ -20,27 +53,33 @@ export function SuiPriceProvider({
   const [isLoadingPrice, setIsLoadingPrice] = useState(false);
   const { addLog } = useLogContext();
   
+  /**
+   * Fetches the latest SUI price from CoinGecko API
+   * Logs the result and updates state
+   *
+   * @returns {Promise<number>} The fetched SUI price
+   */
   const getSuiPrice = useCallback(async (): Promise<number> => {
     setIsLoadingPrice(true);
     try {
       const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=sui&vs_currencies=usd');
       if (!response.ok) {
-        throw new Error(`获取价格失败: ${response.status}`);
+        throw new Error(`Failed to fetch price: ${response.status}`);
       }
       
       const data = await response.json();
       const price = data.sui?.usd;
       
       if (!price) {
-        throw new Error('无法获取SUI价格数据');
+        throw new Error('Unable to get SUI price data');
       }
       
-      addLog(`获取SUI实时价格: 1 SUI = $${price} USD`);
+      addLog(`Fetched SUI real-time price: 1 SUI = $${price} USD`);
       setSuiPrice(price);
       return price;
     } catch (error: any) {
-      addLog(`获取SUI价格失败: ${error.message}，使用默认价格`);
-      // 获取失败时使用默认价格
+      addLog(`Failed to fetch SUI price: ${error.message}, using default price`);
+      // Use default price if fetch fails
       const defaultPrice = 0.1;
       setSuiPrice(defaultPrice);
       return defaultPrice;
@@ -50,10 +89,10 @@ export function SuiPriceProvider({
   }, [addLog]);
   
   useEffect(() => {
-    // 初次加载获取价格
+    // Fetch price on initial load
     getSuiPrice();
     
-    // 每5分钟更新一次价格
+    // Update price every 5 minutes
     const priceInterval = setInterval(() => {
       getSuiPrice();
     }, 5 * 60 * 1000);
@@ -68,6 +107,13 @@ export function SuiPriceProvider({
   );
 }
 
+/**
+ * useSuiPrice provides access to the SUI price context
+ * Must be used within a SuiPriceProvider
+ *
+ * @returns {SuiPriceContextType} SUI price context value
+ * @throws {Error} If used outside of SuiPriceProvider
+ */
 export function useSuiPrice() {
   const context = useContext(SuiPriceContext);
   if (context === undefined) {

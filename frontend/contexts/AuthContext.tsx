@@ -1,3 +1,13 @@
+/**
+ * AuthContext provides authentication and zkLogin address management for the application.
+ * It integrates user authentication, zkLogin address registration, and on-chain verification.
+ *
+ * Features:
+ * - User authentication and session management
+ * - zkLogin address registration and on-chain verification
+ * - Wallet address binding and database persistence
+ * - Centralized logging for authentication events
+ */
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react';
 import { useUser } from '@/hooks/useUser';
 import { useZkLogin } from '@/contexts/ZkLoginContext';
@@ -11,28 +21,60 @@ import { ZkLoginProcessResult } from '@/interfaces/ZkLogin';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { useZkLoginParams } from '@/hooks/useZkLoginParams';
 
+/**
+ * AuthContextType defines the shape of the authentication context, including state and operations.
+ */
 interface AuthContextType {
-  // 状态
+  /**
+   * Current user object
+   */
   user: any;
+  /**
+   * Indicates if user data is loading
+   */
   isLoading: boolean;
+  /**
+   * Indicates if the user is authenticated
+   */
   isAuthenticated: boolean;
-  zkLoginAddress: string | null; // 只保留引用，不管理
+  /**
+   * zkLogin address (reference only)
+   */
+  zkLoginAddress: string | null;
+  /**
+   * Indicates if the address is verified on-chain
+   */
   onChainVerified: boolean;
-  
-  // 方法
-  handleLogin: () => Promise<void>; // 整合所有登录流程
+  /**
+   * Handles the login process, integrating all authentication steps
+   */
+  handleLogin: () => Promise<void>;
+  /**
+   * Handles the logout process
+   */
   handleLogout: () => Promise<void>;
-  completeAuthentication: (zkLoginResult: ZkLoginProcessResult) => Promise<void>; // 新增
+  /**
+   * Completes authentication with zkLogin result
+   * @param zkLoginResult - The zkLogin process result
+   */
+  completeAuthentication: (zkLoginResult: ZkLoginProcessResult) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * AuthProvider supplies authentication context to its children.
+ * Manages user authentication, zkLogin address registration, and on-chain verification.
+ *
+ * @param {Object} props - Component props
+ * @param {ReactNode} props.children - Child components
+ */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { user, isLoading } = useUser();
   const { addLog } = useLogContext();
   const supabase = createClient();
   
-  // 使用ZkLoginContext
+  // Use ZkLoginContext
   const { 
     state: zkLoginState,
     prepareZkLogin,
@@ -41,39 +83,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   const zkLoginAddress = zkLoginState.zkLoginAddress;
   
-  // 使用zkLogin参数Hook
+  // Use zkLogin parameter hook
   const { validateParams, prepareKeypair, getZkLoginParams } = useZkLoginParams();
   
-  // 认证状态
+  // On-chain verification state
   const [onChainVerified, setOnChainVerified] = useState(false);
   const [checkingVerification, setCheckingVerification] = useState(false);
   
-  // 使用引用跟踪是否已经处理
+  // Ref to track if the user/address has been processed
   const processedRef = useRef<{userId?: string, address?: string}>({});
 
-  // 检查认证状态
+  /**
+   * Checks the on-chain verification status of a zkLogin address
+   * @param address - zkLogin address to check
+   * @returns {Promise<boolean>} Whether the address is verified on-chain
+   */
   const checkVerificationStatus = useCallback(async (address: string) => {
     try {
-      addLog("开始检查链上认证状态...");
+      addLog("Start checking on-chain verification status...");
       const result = await contractService.isAddressVerified(address);
       
       if (result.verified) {
-        addLog("zkLogin地址已在链上认证，跳过认证");
+        addLog("zkLogin address is already verified on-chain, skipping verification");
         setOnChainVerified(true);
         return true;
       } else {
-        addLog("zkLogin地址未在链上认证，需要进行认证");
+        addLog("zkLogin address is not verified on-chain, proceeding with verification");
         return false;
       }
     } catch (error: any) {
-      addLog(`检查认证状态失败: ${error.message}，将继续进行认证`);
+      addLog(`Failed to check verification status: ${error.message}, proceeding with verification`);
       return false;
     }
   }, [addLog, setOnChainVerified]);
 
-  // 注册zkLogin地址
+  /**
+   * Registers a zkLogin address on-chain
+   * @param address - zkLogin address
+   * @param keypair - Ephemeral keypair
+   * @param partialSignature - Partial signature for zkLogin
+   * @param userSalt - User salt for zkLogin
+   * @param decodedJwt - Decoded JWT for zkLogin
+   * @returns {Promise<boolean>} Whether registration was successful
+   */
   const registerAddress = useCallback(async (address: string, keypair: any, partialSignature: any, userSalt: string, decodedJwt: any) => {
-    addLog("开始链上认证: 注册zkLogin地址...");
+    addLog("Start on-chain registration: Register zkLogin address...");
     
     try {
       const registerResult = await contractService.registerZkLoginAddress(
@@ -85,28 +139,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
       
       if (registerResult.success) {
-        addLog(`zkLogin地址注册成功，交易ID: ${registerResult.txId}`);
+        addLog(`zkLogin address registered successfully, txId: ${registerResult.txId}`);
         return true;
       } else {
-        addLog(`注册zkLogin地址失败: ${registerResult.error}`);
+        addLog(`Failed to register zkLogin address: ${registerResult.error}`);
         return false;
       }
     } catch (registerError: any) {
-      addLog(`注册zkLogin地址时发生异常: ${registerError.message}`);
+      addLog(`Exception during zkLogin address registration: ${registerError.message}`);
       return false;
     }
   }, [addLog]);
 
-  // 绑定钱包地址
+  /**
+   * Binds a wallet address to a user ID on-chain
+   * @param address - zkLogin address
+   * @param userId - User ID
+   * @param keypair - Ephemeral keypair
+   * @param partialSignature - Partial signature for zkLogin
+   * @param userSalt - User salt for zkLogin
+   * @param decodedJwt - Decoded JWT for zkLogin
+   * @returns {Promise<boolean>} Whether binding was successful
+   */
   const bindWalletAddress = useCallback(async (address: string, userId: string, keypair: any, partialSignature: any, userSalt: string, decodedJwt: any) => {
-    addLog("绑定钱包地址与用户ID...");
+    addLog("Binding wallet address to user ID...");
     
-    // 清理用户ID
+    // Clean user ID
     let userIdStr = String(userId).replace(/[^\w]/g, '');
     if (userIdStr.length > 20) {
       userIdStr = userIdStr.substring(0, 20);
     }
-    addLog(`处理后的用户ID: ${userIdStr}`);
+    addLog(`Processed user ID: ${userIdStr}`);
     
     try {
       const bindResult = await contractService.bindWalletAddress(
@@ -119,41 +182,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
       
       if (bindResult.success) {
-        addLog(`钱包地址绑定成功，交易ID: ${bindResult.txId}`);
+        addLog(`Wallet address bound successfully, txId: ${bindResult.txId}`);
         AppStorage.setAuthTxHash(bindResult.txId || '');
         return true;
       } else {
-        addLog(`绑定钱包地址失败: ${bindResult.error}`);
+        addLog(`Failed to bind wallet address: ${bindResult.error}`);
         return false;
       }
     } catch (bindError: any) {
-      addLog(`绑定钱包地址时发生异常: ${bindError.message}`);
+      addLog(`Exception during wallet address binding: ${bindError.message}`);
       return false;
     }
   }, [addLog]);
 
-  // 主函数 - 链上注册流程
+  /**
+   * Main function for on-chain registration process
+   * @param address - zkLogin address
+   * @param userId - User ID
+   * @returns {Promise<boolean>} Whether registration and binding were successful
+   */
   const registerOnChain = useCallback(async (address: string, userId: string) => {
     addLog("call registerOnChain ");
     
-    // 参数验证
+    // Parameter validation
     if (!validateParams(address, userId)) {
       return false;
     }
 
-    // 准备临时密钥对
+    // Prepare ephemeral keypair
     const keypair = prepareKeypair();
     if (!keypair) return false;
     
-    // 获取zkLogin所需参数
+    // Get zkLogin parameters
     const params = getZkLoginParams();
     if (!params) return false;
     const { partialSignature, userSalt, decodedJwt } = params;
     
-    // 检查认证状态
+    // Check on-chain verification status
     const isVerified = await checkVerificationStatus(address);
 
-    // 如果链上未验证，直接执行绑定（包含注册功能）
+    // If not verified, bind wallet address (includes registration)
     if (!isVerified) {
       const bindSuccess = await bindWalletAddress(
         address, userId, keypair, partialSignature, userSalt, decodedJwt);
@@ -167,27 +235,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   }, [addLog, validateParams, prepareKeypair, getZkLoginParams, checkVerificationStatus, bindWalletAddress, setOnChainVerified]);
 
-  // 监听用户和地址变化，尝试保存zkLogin地址
+  // Listen for user and address changes, attempt to save zkLogin address
   useEffect(() => {
-    // 如果用户或zkLogin地址不存在，返回
+    // If user or zkLogin address does not exist, return
     if (!user || !zkLoginAddress) {
       return;
     }
     
-    // 检查是否已经处理过相同的用户ID和地址
+    // Check if already processed for this user ID and address
     if (processedRef.current.userId === user.id && 
         processedRef.current.address === zkLoginAddress) {
       return;
     }
     
-    // 更新处理记录
+    // Update processed record
     processedRef.current = { userId: user.id, address: zkLoginAddress };
     
-    addLog(`AuthContext useEffect触发: userId=${user.id}, zkLoginAddress=${zkLoginAddress}`);
+    addLog(`AuthContext useEffect triggered: userId=${user.id}, zkLoginAddress=${zkLoginAddress}`);
 
   }, [user, zkLoginAddress, addLog, onChainVerified, checkingVerification, registerOnChain]);
 
-  // 处理登录流程 - 整合所有步骤
+  /**
+   * Handles the login process, integrating all authentication steps
+   * Redirects to Google OAuth for authentication
+   */
   const handleLogin = async () => {
     try {
       if (typeof window !== 'undefined') {
@@ -196,13 +267,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         AppStorage.setLoginInitiated(true);
       }
       
-      addLog("开始登录流程...");
+      addLog("Start login process...");
       
-      // 1. 准备zkLogin（创建临时密钥对）
+      // 1. Prepare zkLogin (create ephemeral keypair)
       const nonce = await prepareZkLogin();
-      addLog("准备zkLogin完成，nonce: " + nonce);
+      addLog("zkLogin preparation complete, nonce: " + nonce);
       
-      // 2. 构建OAuth URL并重定向
+      // 2. Build OAuth URL and redirect
       const googleOAuthEndpoint = 'https://accounts.google.com/o/oauth2/v2/auth';
       const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
       const redirectUri = `${window.location.origin}/auth/callback`;
@@ -217,68 +288,74 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       oauthUrl.searchParams.append('nonce', nonce);
       oauthUrl.searchParams.append('prompt', 'consent');
       
-      addLog("重定向到Google授权页面...");
+      addLog("Redirecting to Google authorization page...");
       window.location.href = oauthUrl.toString();
     } catch (err: any) {
-      addLog(`登录流程异常: ${err.message}`);
+      addLog(`Exception during login process: ${err.message}`);
     }
   };
 
-  // 完成认证（从callback页面调用）
+  /**
+   * Completes authentication (called from callback page)
+   * @param zkLoginResult - The zkLogin process result
+   */
   const completeAuthentication = async (zkLoginResult: ZkLoginProcessResult) => {
     try {
-      addLog(`完成认证流程，zkLogin地址: ${zkLoginResult.zkLoginAddress}`);
+      addLog(`Completing authentication process, zkLogin address: ${zkLoginResult.zkLoginAddress}`);
       
-      // 检查用户登录状态
+      // Check user login status
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) {
-        throw new Error("未找到用户信息");
+        throw new Error("User information not found");
       }
       
-      // 链上认证
+      // On-chain verification
       await registerOnChain(zkLoginResult.zkLoginAddress, currentUser.id);
       
-      // 保存地址到数据库
+      // Save address to database
       await saveUserWithWalletAddress(currentUser.id, zkLoginResult.zkLoginAddress);
       AppStorage.setWalletSaved(true);
       
-      addLog("认证流程完成");
+      addLog("Authentication process complete");
       
-      // 更新处理记录
+      // Update processed record
       processedRef.current = { 
         userId: currentUser.id, 
         address: zkLoginResult.zkLoginAddress 
       };
     } catch (error: any) {
-      addLog(`完成认证流程失败: ${error.message}`);
+      addLog(`Failed to complete authentication process: ${error.message}`);
       throw error;
     }
   };
 
-  // 退出登录
+  /**
+   * Handles the logout process
+   * Clears all storage, resets state, and logs out from Supabase
+   */
   const handleLogout = async () => {
     try {
-      addLog("开始退出登录...");
+      addLog("Start logout process...");
       
-      // 清除所有存储
+      // Clear all storage
       AppStorage.clearAll();
       
-      // 清除处理状态
+      // Clear processed state
       processedRef.current = {};
       
-      // 清除zkLogin状态
+      // Clear zkLogin state
       clearZkLoginState();
       
-      // 登出Supabase
+      // Logout from Supabase
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       
       setOnChainVerified(false);
-      addLog("已成功退出登录");
+      addLog("Successfully logged out");
       window.location.reload();
     } catch (error: any) {
-      console.error("退出登录失败:", error);
-      addLog(`退出登录失败: ${error.message}`);
+      console.error("Logout failed:", error);
+      addLog(`Logout failed: ${error.message}`);
     }
   };
 
@@ -300,6 +377,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * useAuth provides access to the authentication context
+ * Must be used within an AuthProvider
+ *
+ * @returns {AuthContextType} Authentication context value
+ * @throws {Error} If used outside of AuthProvider
+ */
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {

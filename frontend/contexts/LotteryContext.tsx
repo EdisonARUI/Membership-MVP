@@ -1,3 +1,7 @@
+/**
+ * Context for managing lottery operations
+ * Provides functionality for lottery draws, history, and statistics
+ */
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { useZkLoginParams } from '@/hooks/useZkLoginParams';
 import { useLogContext } from '@/contexts/LogContext';
@@ -7,8 +11,12 @@ import { useUser } from '@/hooks/useUser';
 import { useZkLogin } from './ZkLoginContext';
 import { toast } from 'react-hot-toast';
 
+/**
+ * Interface defining the shape of the lottery context
+ * Contains state and methods for lottery operations
+ */
 interface LotteryContextType {
-  // 状态
+  // State
   loading: boolean;
   result: {
     success: boolean;
@@ -18,7 +26,7 @@ interface LotteryContextType {
   lotteryHistory: LotteryHistoryResponse | null;
   lotteryStats: LotteryStats | null;
   
-  // 方法
+  // Methods
   executeDraw: () => Promise<DrawResult | null>;
   fetchLotteryHistory: (limit?: number, winnersOnly?: boolean) => Promise<void>;
   fetchLotteryStats: (period?: string) => Promise<void>;
@@ -28,16 +36,23 @@ interface LotteryContextType {
 
 const LotteryContext = createContext<LotteryContextType | undefined>(undefined);
 
+/**
+ * Provider component for lottery context
+ * Manages lottery operations and state
+ * 
+ * @param {Object} props - Component props
+ * @param {ReactNode} props.children - Child components
+ */
 export function LotteryProvider({ children }: { children: ReactNode }) {
   const { addLog } = useLogContext();
   const { user } = useUser();
   const { state: zkLoginState } = useZkLogin();
   const { zkLoginAddress } = zkLoginState;
   
-  // 使用zkLogin参数Hook
+  // Use zkLogin parameters hook
   const { prepareKeypair, getZkLoginParams } = useZkLoginParams();
   
-  // 状态管理
+  // State management
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{
     success: boolean;
@@ -54,132 +69,140 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
     stats: 0
   });
   
-  // 服务实例
+  // Service instance
   const lotteryService = new LotteryService();
 
   /**
-   * 获取抽奖历史
-   * @param limit 获取数量
-   * @param winnersOnly 是否只获取中奖记录
+   * Fetches lottery history
+   * Implements throttling to prevent excessive API calls
+   * 
+   * @param {number} limit - Maximum number of records to fetch
+   * @param {boolean} winnersOnly - Whether to fetch only winning records
+   * @returns {Promise<void>}
    */
   const fetchLotteryHistory = useCallback(async (limit: number = 10, winnersOnly: boolean = false): Promise<void> => {
     try {
-      // 添加节流逻辑，避免短时间内重复请求
+      // Add throttling logic to prevent duplicate requests
       const now = Date.now();
-      if (now - lastUpdated.history < 2000) { // 2秒内不重复请求
+      if (now - lastUpdated.history < 2000) { // No requests within 2 seconds
         return;
       }
       
       if (zkLoginAddress) {
-        // 获取抽奖历史
+        // Get lottery history
         const response = await lotteryService.getLotteryHistory(zkLoginAddress, limit, winnersOnly);
         
         if (response.success) {
           setLotteryHistory(response);
           setLastUpdated(prev => ({ ...prev, history: now }));
         } else {
-          addLog(`获取抽奖历史失败: ${response.error}`);
+          addLog(`Failed to fetch lottery history: ${response.error}`);
           setLotteryHistory(null);
         }
       }
     } catch (error: any) {
-      // 详细记录错误信息
-      const errorMessage = error.message || '未知错误';
-      addLog(`获取抽奖历史异常: ${errorMessage}`);
+      // Log detailed error information
+      const errorMessage = error.message || 'Unknown error';
+      addLog(`Error fetching lottery history: ${errorMessage}`);
       
-      // 如果有详细信息，也记录下来
+      // Log additional details if available
       if (error.details) {
-        addLog(`错误详情: ${JSON.stringify(error.details)}`);
+        addLog(`Error details: ${JSON.stringify(error.details)}`);
       }
       
       setLotteryHistory(null);
-      toast.error(`获取抽奖历史失败: ${errorMessage}`);
+      toast.error(`Failed to fetch lottery history: ${errorMessage}`);
     }
   }, [zkLoginAddress, lotteryService, addLog, lastUpdated.history]);
   
   /**
-   * 获取抽奖统计
-   * @param period 统计周期
+   * Fetches lottery statistics
+   * Implements throttling to prevent excessive API calls
+   * 
+   * @param {string} period - Statistics period
+   * @returns {Promise<void>}
    */
   const fetchLotteryStats = useCallback(async (period: string = 'all'): Promise<void> => {
     try {
-      // 添加节流逻辑，避免短时间内重复请求
+      // Add throttling logic to prevent duplicate requests
       const now = Date.now();
-      if (now - lastUpdated.stats < 2000) { // 2秒内不重复请求
+      if (now - lastUpdated.stats < 2000) { // No requests within 2 seconds
         return;
       }
       
       if (zkLoginAddress) {
-        // 获取抽奖统计
+        // Get lottery statistics
         const stats = await lotteryService.getLotteryStats(zkLoginAddress, period);
         
         if (stats.success) {
           setLotteryStats(stats);
           setLastUpdated(prev => ({ ...prev, stats: now }));
         } else {
-          addLog(`获取抽奖统计失败: ${stats.error}`);
+          addLog(`Failed to fetch lottery statistics: ${stats.error}`);
           setLotteryStats(null);
         }
       }
     } catch (error: any) {
-      // 详细记录错误信息
-      const errorMessage = error.message || '未知错误';
-      addLog(`获取抽奖统计异常: ${errorMessage}`);
+      // Log detailed error information
+      const errorMessage = error.message || 'Unknown error';
+      addLog(`Error fetching lottery statistics: ${errorMessage}`);
       
-      // 如果有详细信息，也记录下来
+      // Log additional details if available
       if (error.details) {
-        addLog(`错误详情: ${JSON.stringify(error.details)}`);
+        addLog(`Error details: ${JSON.stringify(error.details)}`);
       }
       
       setLotteryStats(null);
-      toast.error(`获取抽奖统计失败: ${errorMessage}`);
+      toast.error(`Failed to fetch lottery statistics: ${errorMessage}`);
     }
   }, [zkLoginAddress, lotteryService, addLog, lastUpdated.stats]);
   
   /**
-   * 执行抽奖
-   * @returns 抽奖结果
+   * Executes a lottery draw
+   * Handles transaction signing and execution
+   * 
+   * @returns {Promise<DrawResult|null>} Draw operation result
    */
   const executeDraw = useCallback(async (): Promise<DrawResult | null> => {
-    // 检查用户是否登录
+    // Check if user is logged in
     if (!user || !zkLoginAddress) {
-      toast.error('请先登录并完成zkLogin认证');
+      toast.error('Please login and complete zkLogin authentication first');
       return null;
     }
     
     setLoading(true);
     setResult(null);
-    addLog("开始抽奖流程...");
+    addLog("Starting lottery draw process...");
     
     try {
-      // 准备临时密钥对
+      // Prepare ephemeral keypair
       const keypair = prepareKeypair();
       if (!keypair) {
-        addLog("抽奖失败：无法获取临时密钥对");
-        toast.error("抽奖失败：无法获取临时密钥对");
+        addLog("Draw failed: Unable to get ephemeral keypair");
+        toast.error("Draw failed: Unable to get ephemeral keypair");
         setResult({
           success: false,
-          message: "抽奖失败：无法获取临时密钥对"
+          message: "Draw failed: Unable to get ephemeral keypair"
         });
         return null;
       }
       
-      // 获取zkLogin所需参数
+      // Get zkLogin parameters
       const params = getZkLoginParams();
       if (!params) {
-        addLog("抽奖失败：无法获取zkLogin参数");
-        toast.error("抽奖失败：无法获取zkLogin参数");
+        addLog("Draw failed: Unable to get zkLogin parameters");
+        toast.error("Draw failed: Unable to get zkLogin parameters");
         setResult({
           success: false,
-          message: "抽奖失败：无法获取zkLogin参数"
+          message: "Draw failed: Unable to get zkLogin parameters"
         });
         return null;
       }
       
       const { partialSignature, userSalt, decodedJwt } = params;
       
-      // 执行抽奖
-      addLog("调用抽奖合约...");
+      // Execute draw
+      addLog("Calling lottery contract...");
       const drawResult = await lotteryService.instantDraw(
         zkLoginAddress,
         keypair,
@@ -188,20 +211,20 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
         decodedJwt
       );
       
-      addLog(`抽奖结果: ${JSON.stringify(drawResult)}`);
+      addLog(`Draw result: ${JSON.stringify(drawResult)}`);
       
       if (drawResult.success) {
-        // 设置结果
+        // Set result
         setResult({
           success: true,
           amount: drawResult.amount,
           message: drawResult.amount 
-            ? `恭喜！你赢得了 ${drawResult.amount / 1000000000} SUI` 
-            : '很遗憾，未中奖'
+            ? `Congratulations! You won ${drawResult.amount / 1000000000} SUI` 
+            : 'Sorry, no win this time'
         });
         
-        // 抽奖成功后务必更新数据，无需条件判断
-        // 延迟一小段时间让数据库更新
+        // Update data after successful draw
+        // Delay to allow database update
         setTimeout(() => {
           fetchLotteryHistory();
           fetchLotteryStats();
@@ -209,40 +232,40 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
         
         return drawResult;
       } else {
-        // 处理失败，添加更多错误细节到日志
+        // Handle failure, add more error details to logs
         const errorDetails = drawResult.errorDetails 
-          ? `详细信息: ${JSON.stringify(drawResult.errorDetails)}` 
+          ? `Details: ${JSON.stringify(drawResult.errorDetails)}` 
           : '';
         
-        addLog(`抽奖失败: ${drawResult.error || '未知错误'}`);
+        addLog(`Draw failed: ${drawResult.error || 'Unknown error'}`);
         if (errorDetails) {
           addLog(errorDetails);
         }
         
         setResult({
           success: false,
-          message: drawResult.error || '抽奖失败'
+          message: drawResult.error || 'Draw failed'
         });
         
-        toast.error(`抽奖失败: ${drawResult.error}`);
+        toast.error(`Draw failed: ${drawResult.error}`);
         return drawResult;
       }
     } catch (error: any) {
-      // 处理异常
-      const errorMessage = error.message || '未知异常';
-      addLog(`抽奖过程中发生错误: ${errorMessage}`);
+      // Handle exception
+      const errorMessage = error.message || 'Unknown error';
+      addLog(`Error during draw process: ${errorMessage}`);
       
-      // 如果有详细信息，也记录下来
+      // Log additional details if available
       if (error.details) {
-        addLog(`错误详情: ${JSON.stringify(error.details)}`);
+        addLog(`Error details: ${JSON.stringify(error.details)}`);
       }
       
       setResult({
         success: false,
-        message: `抽奖失败: ${errorMessage}`
+        message: `Draw failed: ${errorMessage}`
       });
       
-      toast.error(`抽奖失败: ${errorMessage}`);
+      toast.error(`Draw failed: ${errorMessage}`);
       
       return {
         success: false,
@@ -255,15 +278,15 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
   }, [user, zkLoginAddress, addLog, lotteryService, prepareKeypair, getZkLoginParams, fetchLotteryHistory, fetchLotteryStats]);
   
   /**
-   * 重置抽奖结果
+   * Resets the draw result
    */
   const resetResult = useCallback(() => {
     setResult(null);
   }, []);
 
   /**
-   * 重置数据更新时间戳
-   * 用于在对话框关闭后，确保下次打开时能获取最新数据
+   * Resets data update timestamps
+   * Ensures fresh data fetch when dialog reopens
    */
   const resetUpdateTimestamp = useCallback(() => {
     setLastUpdated({
@@ -272,7 +295,7 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
     });
   }, []);
   
-  // 上下文值
+  // Context value
   const value = {
     loading,
     result,
@@ -292,6 +315,13 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Hook for accessing lottery context
+ * Must be used within a LotteryProvider
+ * 
+ * @returns {LotteryContextType} Lottery context value
+ * @throws {Error} If used outside of LotteryProvider
+ */
 export function useLottery() {
   const context = useContext(LotteryContext);
   if (context === undefined) {

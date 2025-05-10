@@ -1,3 +1,13 @@
+/**
+ * ZkLoginContext provides context and state management for zkLogin authentication flows.
+ * It manages ephemeral keypair preparation, state clearing, and centralized logging for zkLogin operations.
+ *
+ * Features:
+ * - zkLogin ephemeral keypair preparation and nonce management
+ * - Centralized logging for zkLogin events
+ * - State management for zkLogin authentication
+ * - Synchronization with persistent storage
+ */
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
@@ -8,24 +18,48 @@ import { ZkLoginService } from '@/utils/ZkLoginService';
 import { ZkLoginProcessResult } from '@/interfaces/ZkLogin';
 import { useLogContext } from '@/contexts/LogContext';
 
-// 新的Context接口，专注于zkLogin技术实现并包含日志功能
+/**
+ * ZkLoginContextType defines the shape of the zkLogin context, including state and operations.
+ */
 interface ZkLoginContextType {
-  // 状态
+  /**
+   * zkLogin state object
+   */
   state: ZkLoginState;
-  
-  // 方法
-  prepareZkLogin: () => Promise<string>; // 只负责准备密钥对并返回nonce
-  // processJwt: (jwt: string) => Promise<ZkLoginProcessResult>;
+  /**
+   * Prepares zkLogin by generating an ephemeral keypair and returning a nonce
+   * @returns {Promise<string>} The generated nonce
+   */
+  prepareZkLogin: () => Promise<string>;
+  /**
+   * Clears all zkLogin-related state and session storage
+   */
   clearState: () => void;
-  
-  // 日志相关
+  /**
+   * Array of log messages related to zkLogin
+   */
   logs: string[];
+  /**
+   * Adds a log message
+   * @param message - The log message to add
+   */
   addLog: (message: string) => void;
+  /**
+   * Clears all log messages
+   */
   clearLogs: () => void;
 }
 
 const ZkLoginContext = createContext<ZkLoginContextType | undefined>(undefined);
 
+/**
+ * ZkLoginProvider supplies zkLogin context to its children.
+ * Manages zkLogin state, ephemeral keypair preparation, and logging.
+ *
+ * @param {Object} props - Component props
+ * @param {ReactNode} props.children - Child components
+ * @param {string} [props.userId] - Optional user ID for zkLogin
+ */
 export function ZkLoginProvider({ 
   children,
   userId
@@ -33,10 +67,10 @@ export function ZkLoginProvider({
   children: ReactNode;
   userId?: string;
 }) {
-  // 使用共享的日志hook
+  // Use shared log hook
   const logHook = useLogContext();
   
-  // 使用hook获取基础zkLogin功能，并传入日志回调函数
+  // Use hook to get base zkLogin functionality and pass log callback
   const {
     zkLoginAddress,
     ephemeralKeypair,
@@ -49,7 +83,7 @@ export function ZkLoginProvider({
     log
   } = useZkLoginHook(userId);
 
-  // 合成状态
+  // Compose zkLogin state
   const [state, setState] = useState<ZkLoginState>({
     zkLoginAddress,
     ephemeralKeypair,
@@ -61,7 +95,7 @@ export function ZkLoginProvider({
     partialSignature: AppStorage.getZkLoginPartialSignature()
   });
 
-  // 当各子状态更新时更新总状态
+  // Update composed state when sub-states change
   useEffect(() => {
     setState({
       zkLoginAddress,
@@ -82,19 +116,25 @@ export function ZkLoginProvider({
     zkLoginJwt
   ]);
 
-  // 准备zkLogin（创建临时密钥对）- 不包含OAuth重定向逻辑
+  /**
+   * Prepares zkLogin by generating a new ephemeral keypair and returning a nonce
+   * Also saves original parameters for later ZK proof verification
+   *
+   * @returns {Promise<string>} The generated nonce
+   * @throws {Error} If keypair creation fails
+   */
   const prepareZkLogin = async (): Promise<string> => {
     try {
-      // 强制创建新的临时密钥对
+      // Force creation of a new ephemeral keypair
       const generatedNonce = await initializeZkLogin(true);
       if (!generatedNonce) {
-        logHook.addLog("无法继续：临时密钥对创建失败");
-        throw new Error("临时密钥对创建失败");
+        logHook.addLog("Unable to continue: Failed to create ephemeral keypair");
+        throw new Error("Failed to create ephemeral keypair");
       }
 
-      logHook.addLog(`zkLogin准备完成，nonce: ${generatedNonce}`);
+      logHook.addLog(`zkLogin preparation complete, nonce: ${generatedNonce}`);
       
-      // 保存OAuth流程中使用的原始参数，以便后续ZK证明验证使用
+      // Save original parameters for OAuth/ZK proof verification
       const updatedEphemeralData = AppStorage.getEphemeralKeypair();
       if (updatedEphemeralData) {
         AppStorage.setZkLoginOriginalNonce(updatedEphemeralData.nonce);
@@ -104,50 +144,25 @@ export function ZkLoginProvider({
       
       return generatedNonce;
     } catch (err: any) {
-      logHook.addLog(`准备zkLogin失败: ${err.message}`);
+      logHook.addLog(`Failed to prepare zkLogin: ${err.message}`);
       throw err;
     }
   };
 
-  // // 处理JWT - 拆分自身份验证流程
-  // const processJwt = async (jwt: string): Promise<ZkLoginProcessResult> => {
-  //   try {
-  //     addLog("开始处理JWT...");
-  //     const result = await ZkLoginService.processJwt(jwt);
-  //     addLog(`JWT处理成功，地址: ${result.zkLoginAddress}`);
-  //     await handleZkLoginAddress(result.zkLoginAddress);
-  //     return result;
-  //   } catch (error: any) {
-  //     // 提取更详细的错误信息
-  //     const errorDetails = error.responseText
-  //       ? `错误响应: ${error.responseText.substring(0, 100)}...`
-  //       : error.message;
-      
-  //     addLog(`处理JWT失败: ${errorDetails}`);
-      
-  //     // 如果错误包含"Unexpected token '<'"，可能是API返回了HTML而非JSON
-  //     if (error.message.includes("Unexpected token '<'") || error.message.includes("<!DOCTYPE")) {
-  //       addLog("API返回了HTML而不是JSON，可能是服务器配置问题或API端点错误");
-  //     }
-      
-  //     throw error;
-  //   }
-  // };
-
-  // 清除状态
+  /**
+   * Clears all zkLogin-related state and session storage
+   * Logs the clearing event
+   */
   const clearState = (): void => {
     clearZkLoginState();
-    
-    // 手动重置所有会话状态
+    // Manually reset all session state
     AppStorage.clearSessionStorage();
-    
-    logHook.addLog("已完全清除zkLogin状态");
+    logHook.addLog("zkLogin state fully cleared");
   };
 
   const value: ZkLoginContextType = {
     state,
     prepareZkLogin,
-    // processJwt,
     clearState,
     logs: logHook.logs,
     addLog: logHook.addLog,
@@ -161,6 +176,13 @@ export function ZkLoginProvider({
   );
 }
 
+/**
+ * useZkLogin provides access to the zkLogin context
+ * Must be used within a ZkLoginProvider
+ *
+ * @returns {ZkLoginContextType} zkLogin context value
+ * @throws {Error} If used outside of ZkLoginProvider
+ */
 export function useZkLogin() {
   const context = useContext(ZkLoginContext);
   if (context === undefined) {
