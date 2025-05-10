@@ -1,3 +1,13 @@
+/**
+ * Server actions for authentication, user management, and zkLogin integration.
+ * Provides functions for sign up, sign in, password reset, wallet address management, and zkLogin salt association.
+ *
+ * Features:
+ * - Handles user authentication and session management
+ * - Manages wallet address saving and verification
+ * - Integrates with Supabase and Sui blockchain
+ * - Provides zkLogin salt management and association
+ */
 "use server";
 
 import { encodedRedirect } from "@/utils/CommonUtils";
@@ -6,6 +16,11 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { parseJwt } from "@/utils/jwt/server";
 
+/**
+ * Handles user sign up with email and password
+ * @param formData - Form data containing email and password
+ * @returns Encoded redirect or success message
+ */
 export const signUpAction = async (formData: FormData) => {
   const email = formData.get("email")?.toString();
   const password = formData.get("password")?.toString();
@@ -40,6 +55,11 @@ export const signUpAction = async (formData: FormData) => {
   }
 };
 
+/**
+ * Handles user sign in with email and password
+ * @param formData - Form data containing email and password
+ * @returns Encoded redirect or home page redirect
+ */
 export const signInAction = async (formData: FormData) => {
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
@@ -57,6 +77,11 @@ export const signInAction = async (formData: FormData) => {
   return redirect("/");
 };
 
+/**
+ * Handles forgot password request
+ * @param formData - Form data containing email
+ * @returns Encoded redirect or callback URL
+ */
 export const forgotPasswordAction = async (formData: FormData) => {
   const email = formData.get("email")?.toString();
   const supabase = await createClient();
@@ -91,6 +116,11 @@ export const forgotPasswordAction = async (formData: FormData) => {
   );
 };
 
+/**
+ * Handles password reset
+ * @param formData - Form data containing new password and confirmation
+ * @returns Encoded redirect or error message
+ */
 export const resetPasswordAction = async (formData: FormData) => {
   const supabase = await createClient();
 
@@ -128,6 +158,11 @@ export const resetPasswordAction = async (formData: FormData) => {
   encodedRedirect("success", "/protected/reset-password", "Password updated");
 };
 
+/**
+ * Handles sign in with Google OAuth
+ * @param formData - Form data containing nonce
+ * @returns Redirect to Google OAuth or error page
+ */
 export const signInWithGoogleAction = async (formData: FormData) => {
   const nonce = formData.get("nonce") as string;
   
@@ -151,12 +186,22 @@ export const signInWithGoogleAction = async (formData: FormData) => {
   return redirect(data.url);
 };
 
+/**
+ * Handles user sign out
+ * @returns Redirect to sign-in page
+ */
 export const signOutAction = async () => {
   const supabase = await createClient();
   await supabase.auth.signOut();
   return redirect("/sign-in");
 };
 
+/**
+ * Saves a user's wallet address to the database
+ * @param userId - The user's ID
+ * @param walletAddress - The wallet address to save
+ * @returns Success or error result
+ */
 export async function saveUserWithWalletAddress(userId: string, walletAddress: string) {
   console.log("=== 开始保存钱包地址 ===");
   console.log("用户ID:", userId);
@@ -258,7 +303,11 @@ export async function saveUserWithWalletAddress(userId: string, walletAddress: s
   }
 }
 
-// 检查钱包地址是否保存成功
+/**
+ * Checks if a user's wallet address has been saved
+ * @param userId - The user's ID
+ * @returns Object indicating if the wallet address is saved
+ */
 export async function checkWalletAddressSaved(userId: string) {
   console.log("检查用户钱包地址是否已保存:", userId);
   
@@ -293,7 +342,10 @@ export async function checkWalletAddressSaved(userId: string) {
   }
 }
 
-// 检查数据库RLS权限
+/**
+ * Checks database RLS (Row Level Security) permissions
+ * @returns Object with permission check results
+ */
 export async function checkDatabasePermissions() {
   console.log("检查数据库权限...");
   
@@ -367,7 +419,11 @@ export async function checkDatabasePermissions() {
   return results;
 }
 
-// zkLogin相关函数
+/**
+ * Retrieves the user salt for zkLogin
+ * @param jwt - The user's JWT
+ * @returns Object with salt or error
+ */
 export async function getUserSalt(jwt: string) {
   console.log("开始获取用户盐值");
   
@@ -411,7 +467,12 @@ export async function getUserSalt(jwt: string) {
   }
 }
 
-// 关联zkLogin盐值到已登录用户
+/**
+ * Associates a zkLogin salt with the logged-in user
+ * @param jwt - The user's JWT
+ * @param salt - The salt to associate
+ * @returns Success or error result
+ */
 export async function associateSaltWithUser(jwt: string, salt: string) {
   console.log("开始关联盐值到用户");
   

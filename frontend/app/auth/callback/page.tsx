@@ -1,3 +1,14 @@
+/**
+ * AuthCallback page handles the authentication callback from Google OAuth and zkLogin.
+ * It processes the id_token, signs in with Supabase, completes zkLogin authentication, and redirects the user.
+ *
+ * Features:
+ * - Handles Google OAuth callback and extracts id_token
+ * - Signs in with Supabase using the id_token
+ * - Processes zkLogin authentication and completes on-chain registration
+ * - Displays authentication status and error feedback
+ * - Redirects to the target page after authentication
+ */
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -9,8 +20,13 @@ import { useLogContext } from '@/contexts/LogContext';
 // import { LogDisplay } from '@/components/debug/LogDisplay';
 import { ZkLoginService } from '@/utils/ZkLoginService';
 
+/**
+ * AuthCallback page component for handling authentication callback
+ *
+ * @returns {JSX.Element} The rendered authentication callback page
+ */
 export default function AuthCallback() {
-  const [status, setStatus] = useState('处理登录...');
+  const [status, setStatus] = useState('Processing login...');
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectPath = searchParams.get('redirect') || '/';
@@ -22,55 +38,58 @@ export default function AuthCallback() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
+  /**
+   * Handles the authentication callback, processes id_token, signs in with Supabase, and completes zkLogin
+   */
   const handleSupabaseSignInWithIdToken = async () => {
-    setStatus('开始处理认证回调...');
+    setStatus('Starting authentication callback...');
 
     try {
-      // 获取hash中的id_token
+      // Extract id_token from hash params
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
-      addLog("获取到hash参数");
+      addLog("Hash parameters obtained");
 
       const idToken = hashParams.get("id_token");
       if (!idToken) {
-        throw new Error("未找到id_token");
+        throw new Error("id_token not found");
       }
       
-      setStatus('已获取身份令牌，正在处理...');
-      addLog("获取到id_token, 开始处理");
+      setStatus('Identity token obtained, processing...');
+      addLog("id_token obtained, processing");
       
-      // 1. 处理Supabase登录
+      // 1. Sign in with Supabase
       const { data, error } = await supabase.auth.signInWithIdToken({
         provider: 'google',
         token: idToken,
       });
       
       if (error) {
-        addLog(`Supabase授权错误: ${error.message}`);
+        addLog(`Supabase authorization error: ${error.message}`);
         router.push(`/?error=auth_failed`);
         return;
       }
       
-      addLog("Supabase登录成功");
-      setStatus('Supabase登录成功，处理zkLogin...');
+      addLog("Supabase login successful");
+      setStatus('Supabase login successful, processing zkLogin...');
       
-      // 2. 处理 zkLogin
+      // 2. Process zkLogin
       const zkLoginResult = await ZkLoginService.processJwt(idToken);
-      addLog(`zkLogin处理成功，地址: ${zkLoginResult.zkLoginAddress}`);
+      addLog(`zkLogin processed successfully, address: ${zkLoginResult.zkLoginAddress}`);
       
-      setStatus('zkLogin处理成功，完成认证...');
+      setStatus('zkLogin processed successfully, completing authentication...');
       
-      // 3. 完成认证流程 - 链上认证和保存用户关联
+      // 3. Complete authentication (on-chain registration and user association)
       await completeAuthentication(zkLoginResult);
       
-      // 4. 重定向到目标页面
-      addLog(`认证完成，重定向到: ${redirectPath}`);
+      // 4. Redirect to target page
+      addLog(`Authentication complete, redirecting to: ${redirectPath}`);
       router.push(redirectPath);
     } catch (error: any) {
-      console.error('处理认证回调时出错:', error);
-      setStatus(`认证失败: ${error.message}`);
-      addLog(`认证失败: ${error.message}`);
+      console.error('Error during authentication callback:', error);
+      setStatus(`Authentication failed: ${error.message}`);
+      addLog(`Authentication failed: ${error.message}`);
       
-      // 5秒后重定向回首页
+      // Redirect to home after 5 seconds
       setTimeout(() => {
         router.push('/?error=auth_failed');
       }, 5000);
@@ -78,14 +97,14 @@ export default function AuthCallback() {
   }
 
   useEffect(() => {
-    addLog("认证回调页面初始化");
+    addLog("Auth callback page initialized");
     handleSupabaseSignInWithIdToken();
   }, []);
   
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900">
       <div className="bg-slate-800 p-8 rounded-lg shadow-xl text-white max-w-md w-full mb-8">
-        <h1 className="text-2xl font-bold mb-4">认证处理</h1>
+        <h1 className="text-2xl font-bold mb-4">Authentication Processing</h1>
         <div className="flex items-center space-x-3 mb-4">
           <div className="animate-spin rounded-full h-5 w-5 border-2 border-yellow-400 border-t-transparent"></div>
           <p>{status}</p>

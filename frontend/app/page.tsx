@@ -1,3 +1,13 @@
+/**
+ * Home page for the Membership MVP application.
+ * Displays subscription plans, handles subscription management, deposit, and payment dialogs.
+ *
+ * Features:
+ * - Shows available subscription plans and allows subscribing
+ * - Handles deposit, subscription management, and payment dialogs
+ * - Integrates with context providers for state management
+ * - Displays loading and empty state feedback
+ */
 "use client";
 
 // import { SuiPriceProvider, useSuiPrice } from "@/contexts/SuiPriceContext";
@@ -14,7 +24,11 @@ import { ZkLoginProvider, useZkLogin } from "@/contexts/ZkLoginContext";
 import { useDeposit } from "@/contexts/DepositContext";
 import { LogProvider } from "@/contexts/LogContext";
 
-
+/**
+ * Home page component
+ *
+ * @returns {JSX.Element} The rendered home page
+ */
 export default function Home() {
   return (
     <LogProvider>
@@ -27,8 +41,13 @@ export default function Home() {
   );
 }
 
+/**
+ * HomeContent component for displaying subscription plans and dialogs
+ *
+ * @returns {JSX.Element} The rendered content for the home page
+ */
 function HomeContent() {
-  // 使用Context
+  // Use context hooks
   const { 
     activeSubscription,
     loadingAction,
@@ -48,31 +67,36 @@ function HomeContent() {
     handlePaymentConfirm
   } = usePayment();
   
-  // 使用Hooks
+  // Use deposit context
   const { 
     showDepositDialog, 
     setShowDepositDialog, 
   } = useDeposit();
 
-  // 处理数据加载和空数据情况
+  /**
+   * Show loading spinner while subscription plans are loading
+   */
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white flex items-center justify-center">
         <div className="text-center p-8">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-yellow-400 border-t-transparent mx-auto mb-4"></div>
-          <p className="text-lg">正在加载订阅计划...</p>
+          <p className="text-lg">Loading subscription plans...</p>
         </div>
       </div>
     );
   }
 
+  /**
+   * Show empty state if no subscription plans are available
+   */
   if (!subscriptionPlans || subscriptionPlans.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white flex items-center justify-center">
         <div className="text-center p-8 max-w-md">
           <div className="text-yellow-400 text-4xl mb-4">⚠️</div>
-          <h2 className="text-xl font-bold mb-2">暂无订阅计划</h2>
-          <p className="text-gray-400">目前没有可用的订阅计划，请稍后再试。</p>
+          <h2 className="text-xl font-bold mb-2">No subscription plans available</h2>
+          <p className="text-gray-400">There are currently no available subscription plans. Please try again later.</p>
         </div>
       </div>
     );
@@ -95,13 +119,13 @@ function HomeContent() {
           onSubscribe={handleSubscribeClick}
         />
         
-        {/* 充值对话框 */}
+        {/* Deposit dialog */}
         <DepositDialog
           isOpen={showDepositDialog}
           onClose={() => setShowDepositDialog(false)}
         />
 
-        {/* 订阅管理对话框 */}
+        {/* Subscription management dialog */}
         <SubscriptionManagementDialog
           isOpen={showSubscriptionManagement}
           onClose={() => setShowSubscriptionManagement(false)}
@@ -113,7 +137,7 @@ function HomeContent() {
           onRenewSubscription={handleRenewSubscription}
         />
 
-        {/* 支付对话框 */}
+        {/* Payment dialog */}
         <PaymentDialog
           isOpen={showPaymentDialog}
           onClose={() => setShowPaymentDialog(false)}
