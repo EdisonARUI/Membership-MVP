@@ -3,6 +3,7 @@ export interface DrawResult {
     txId?: string;
     amount?: number;
     error?: string;
+    errorDetails?: any;
   }
   
   // API请求参数接口
@@ -41,4 +42,12 @@ export interface DrawResult {
     error?: string;
     total_count?: number;
     total_amount?: number;
+  }
+
+  export interface LotteryStats {
+    success: boolean;
+    error?: string;
+    total_count?: number;
+    total_amount?: number;
+    win_count?: number;
   }
