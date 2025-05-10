@@ -2,12 +2,13 @@ module subscription::subscription {
     use sui::object::{Self, UID, ID};
     use sui::tx_context::{Self, TxContext};
     use sui::coin::{Self, Coin};
-    use sui::sui::SUI;
     use sui::transfer;
     use sui::event::emit;
     use sui::clock::{Self, Clock};
     use std::option::{Self, Option};
     use authentication::authentication::{Self, AuthRegistry, check_authorization};
+    use coin::test_usdt::{Self, TEST_USDT};
+    use fund::fund::{Self, Fund};
 
     // 错误码
     const EInsufficientPayment: u64 = 0;
@@ -55,13 +56,14 @@ module subscription::subscription {
         owner: address
     }
 
-    // 创建年费订阅
+    // 创建订阅
     public entry fun create_subscription(
-        payment: Coin<SUI>,
+        payment: Coin<TEST_USDT>,
         duration: u64,
         auto_renew: bool,
         clock: &Clock,
         auth: &AuthRegistry,
+        fund: &mut Fund,
         ctx: &mut TxContext
     ) {
         // 验证 zkLogin 授权
@@ -69,8 +71,9 @@ module subscription::subscription {
         
         let amount = coin::value(&payment);
         
-        // 处理支付，这里简化处理，实际应转入项目金库
-        transfer::public_transfer(payment, tx_context::sender(ctx));
+        // 处理支付，将资金转入订阅资金池
+        let sender = tx_context::sender(ctx);
+        fund::add_to_fund(fund, payment, sender);
         
         // 计算时间
         let current_time = clock::timestamp_ms(clock);
@@ -105,9 +108,10 @@ module subscription::subscription {
     // 续订会员
     public entry fun renew_subscription(
         subscription: &mut Subscription,
-        payment: Coin<SUI>,
+        payment: Coin<TEST_USDT>,
         clock: &Clock,
         auth: &AuthRegistry,
+        fund: &mut Fund,
         ctx: &mut TxContext
     ) {
         // 验证 zkLogin 授权
@@ -118,8 +122,9 @@ module subscription::subscription {
         
         let amount = coin::value(&payment);
         
-        // 处理支付
-        transfer::public_transfer(payment, tx_context::sender(ctx));
+        // 处理支付，将资金转入订阅资金池
+        let sender = tx_context::sender(ctx);
+        fund::add_to_fund(fund, payment, sender);
         
         // 计算新的结束时间
         let current_time = clock::timestamp_ms(clock);
