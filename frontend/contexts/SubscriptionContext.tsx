@@ -15,6 +15,7 @@ import {
   RenewSubscriptionRequest
 } from '@/interfaces/Subscription';
 import { SubscriptionService } from '@/utils/SubscriptionService';
+import { usePathname } from 'next/navigation';
 
 /**
  * Interface defining the shape of the subscription context
@@ -52,6 +53,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { prepareKeypair, getZkLoginParams } = useZkLoginParams();
   const { addLog } = useLogContext();
   const subscriptionService = new SubscriptionService();
+  const pathname = usePathname();
 
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
@@ -74,6 +76,15 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       fetchSubscriptions();
     }
   }, [user, zkLoginAddress]);
+
+  useEffect(() => {
+    // Rehydrate logic if needed (e.g., clear and refetch plans/subscriptions)
+    if (sessionStorage.getItem('justLoggedIn')) {
+      fetchPlans();
+      fetchSubscriptions();
+      sessionStorage.removeItem('justLoggedIn');
+    }
+  }, [pathname]);
 
   /**
    * Fetches user subscriptions

@@ -10,6 +10,8 @@ import { DrawResult, LotteryHistoryResponse, LotteryStats } from '@/interfaces/L
 import { useUser } from '@/hooks/useUser';
 import { useZkLogin } from './ZkLoginContext';
 import { toast } from 'react-hot-toast';
+import { usePathname } from 'next/navigation';
+import React from 'react';
 
 /**
  * Interface defining the shape of the lottery context
@@ -71,6 +73,8 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
   
   // Service instance
   const lotteryService = new LotteryService();
+
+  const pathname = usePathname();
 
   /**
    * Fetches lottery history
@@ -294,6 +298,15 @@ export function LotteryProvider({ children }: { children: ReactNode }) {
       stats: 0
     });
   }, []);
+  
+  // Add rehydrate effect
+  React.useEffect(() => {
+    if (sessionStorage.getItem('justLoggedIn')) {
+      fetchLotteryHistory();
+      fetchLotteryStats();
+      sessionStorage.removeItem('justLoggedIn');
+    }
+  }, [pathname]);
   
   // Context value
   const value = {

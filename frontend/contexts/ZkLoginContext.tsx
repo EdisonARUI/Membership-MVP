@@ -17,6 +17,7 @@ import { useZkLogin as useZkLoginHook } from '@/hooks/useZkLogin';
 import { ZkLoginService } from '@/utils/ZkLoginService';
 import { ZkLoginProcessResult } from '@/interfaces/ZkLogin';
 import { useLogContext } from '@/contexts/LogContext';
+import { usePathname } from 'next/navigation';
 
 /**
  * ZkLoginContextType defines the shape of the zkLogin context, including state and operations.
@@ -95,26 +96,24 @@ export function ZkLoginProvider({
     partialSignature: AppStorage.getZkLoginPartialSignature()
   });
 
-  // Update composed state when sub-states change
+  const pathname = usePathname();
+
   useEffect(() => {
-    setState({
-      zkLoginAddress,
-      ephemeralKeypair,
-      isInitialized,
-      error: zkLoginError,
-      loading: zkLoginLoading,
-      jwt: zkLoginJwt,
-      status: zkLoginLoading ? 'initializing' : (isInitialized ? 'ready' : 'idle'),
-      partialSignature: AppStorage.getZkLoginPartialSignature()
-    });
-  }, [
-    zkLoginAddress,
-    ephemeralKeypair,
-    isInitialized,
-    zkLoginError,
-    zkLoginLoading,
-    zkLoginJwt
-  ]);
+    const rehydrate = () => {
+      setState({
+        zkLoginAddress: AppStorage.getZkLoginAddress(),
+        ephemeralKeypair: AppStorage.getEphemeralKeypair(),
+        isInitialized: !!AppStorage.getZkLoginAddress(),
+        error: null,
+        loading: false,
+        jwt: null
+      });
+    };
+    rehydrate();
+    if (sessionStorage.getItem('justLoggedIn')) {
+      sessionStorage.removeItem('justLoggedIn');
+    }
+  }, [pathname]);
 
   /**
    * Prepares zkLogin by generating a new ephemeral keypair and returning a nonce

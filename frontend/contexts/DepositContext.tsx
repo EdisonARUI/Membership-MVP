@@ -17,6 +17,8 @@ import { DepositResponse, DepositRecordsResponse } from '@/interfaces/Deposit';
 import { useUser } from '@/hooks/useUser';
 import { useZkLogin } from './ZkLoginContext';
 import { toast } from 'react-hot-toast';
+import { usePathname } from 'next/navigation';
+import React from 'react';
 
 /**
  * Interface defining the shape of the deposit context
@@ -79,6 +81,7 @@ export function DepositProvider({ children }: { children: ReactNode }) {
   const [lastUpdated, setLastUpdated] = useState(0);
   
   const depositService = new DepositService();
+  const pathname = usePathname();
 
   /**
    * Fetches deposit records for the current user
@@ -218,6 +221,14 @@ export function DepositProvider({ children }: { children: ReactNode }) {
   const resetResult = useCallback(() => {
     setResult(null);
   }, []);
+  
+  // Add rehydrate effect
+  React.useEffect(() => {
+    if (sessionStorage.getItem('justLoggedIn')) {
+      fetchDepositRecords();
+      sessionStorage.removeItem('justLoggedIn');
+    }
+  }, [pathname]);
   
   const value = {
     loading,

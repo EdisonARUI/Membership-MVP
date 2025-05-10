@@ -20,6 +20,7 @@ import { SuiService } from '@/utils/SuiService';
 import { ZkLoginProcessResult } from '@/interfaces/ZkLogin';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { useZkLoginParams } from '@/hooks/useZkLoginParams';
+import { usePathname } from 'next/navigation';
 
 /**
  * AuthContextType defines the shape of the authentication context, including state and operations.
@@ -92,6 +93,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   // Ref to track if the user/address has been processed
   const processedRef = useRef<{userId?: string, address?: string}>({});
+
+  const pathname = usePathname();
 
   /**
    * Checks the on-chain verification status of a zkLogin address
@@ -254,6 +257,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     addLog(`AuthContext useEffect triggered: userId=${user.id}, zkLoginAddress=${zkLoginAddress}`);
 
   }, [user, zkLoginAddress, addLog, onChainVerified, checkingVerification, registerOnChain]);
+
+  useEffect(() => {
+    // Rehydrate user from Supabase session
+    const rehydrate = async () => {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser) {
+        // Optionally update state here if you have custom user state
+      }
+    };
+    rehydrate();
+    if (sessionStorage.getItem('justLoggedIn')) {
+      sessionStorage.removeItem('justLoggedIn');
+    }
+  }, [pathname]);
 
   /**
    * Handles the login process, integrating all authentication steps
