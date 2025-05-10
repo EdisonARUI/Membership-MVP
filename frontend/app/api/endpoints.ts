@@ -16,7 +16,20 @@ export const API_ENDPOINTS = {
     FAUCET: 'https://faucet.devnet.sui.io/v2/gas'
   },
   LOTTERY: {
-    HISTORY: '/api/lottery',
-    RECORD: '/api/lottery'
+    HISTORY: '/api/lottery/history',
+    RECORDS: '/api/lottery/records',
+    STATS: '/api/lottery/stats'
+  },
+  DEPOSIT: {
+    MINT: '/api/deposit/mint',
+    RECORDS: '/api/deposit/records'
+  },
+  SUBSCRIPTION: {
+    CREATE: '/api/subscription/create',
+    RENEW: '/api/subscription/renew',
+    CANCEL: '/api/subscription/cancel',
+    AUTO_RENEW: '/api/subscription/auto-renew',
+    STATUS: '/api/subscription/status',
+    PLANS: '/api/subscription/plans',
   }
 };

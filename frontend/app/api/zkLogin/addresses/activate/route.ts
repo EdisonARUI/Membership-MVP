@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SuiService } from '@/utils/sui';
+import { SuiService } from '@/utils/SuiService';
 
 interface ActivateAddressRequest {
   address: string;
