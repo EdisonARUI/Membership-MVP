@@ -1,43 +1,51 @@
--- 启用扩展（如果尚未启用）
+/**
+ * Lottery Records Table Schema
+ * 
+ * This script creates and configures the lottery_records table for tracking lottery participation
+ * and winnings. It includes table creation, indexes, RLS policies, and triggers for automatic
+ * timestamp updates.
+ */
+
+-- Enable UUID extension if not already enabled
 -- create extension if not exists "uuid-ossp";
 
--- 创建抽奖记录表
+-- Create lottery records table
 create table if not exists lottery_records (
-  id uuid primary key default uuid_generate_v4(),
-  player_address text not null,
-  tx_hash text not null unique,
-  win_amount bigint not null default 0,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
+  id uuid primary key default uuid_generate_v4(),  -- Unique identifier for each lottery record
+  player_address text not null,                    -- Player's wallet address
+  tx_hash text not null unique,                    -- Unique transaction hash for verification
+  win_amount bigint not null default 0,            -- Amount won in the lottery
+  created_at timestamptz default now(),            -- Record creation timestamp
+  updated_at timestamptz default now()             -- Record last update timestamp
 );
 
--- 创建索引
-create index if not exists idx_lottery_records_player on lottery_records(player_address);
-create index if not exists idx_lottery_records_created_at on lottery_records(created_at);
-create index if not exists idx_lottery_records_win_amount on lottery_records(win_amount);
+-- Create indexes for performance optimization
+create index if not exists idx_lottery_records_player on lottery_records(player_address);      -- Index for player address lookups
+create index if not exists idx_lottery_records_created_at on lottery_records(created_at);      -- Index for time-based queries
+create index if not exists idx_lottery_records_win_amount on lottery_records(win_amount);      -- Index for win amount queries
 
--- 启用 RLS
+-- Enable Row Level Security (RLS)
 alter table lottery_records enable row level security;
 
--- 所有用户可查看抽奖记录
-create policy "所有用户可查看抽奖记录"
+-- RLS Policy: All users can view lottery records
+create policy "All users can view lottery records"
   on lottery_records for select
   using (true);
 
--- 新策略：允许用户添加自己的抽奖记录
-create policy "用户可以添加自己的抽奖记录"
+-- RLS Policy: Allow users to add their own lottery records
+create policy "Users can add their own lottery records"
   on lottery_records for insert
-  with check (true);  -- 允许所有插入，因为验证在API层进行
+  with check (true);  -- Note: Actual user validation should be implemented in the application layer
 
--- 如果需要更严格的控制，可以使用以下策略（假设用户认证信息与player_address有关联）
--- create policy "用户可以添加自己的抽奖记录"
+-- Alternative stricter policy (commented out)
+-- create policy "Users can add their own lottery records"
 --   on lottery_records for insert
 --   with check (
---     player_address = auth.uid()::text  -- 如果player_address与用户ID相关
---     -- 或者其他能验证用户身份的条件
+--     player_address = auth.uid()::text  -- If player_address is related to user ID
+--     -- Or other user identity verification conditions
 --   );
 
--- 自动更新时间戳
+-- Function to automatically update timestamp
 create or replace function trigger_set_timestamp()
 returns trigger as $$
 begin
@@ -46,7 +54,7 @@ begin
 end;
 $$ language plpgsql;
 
--- 创建触发器
+-- Create trigger for automatic timestamp updates
 create trigger set_lottery_records_timestamp
 before update on lottery_records
 for each row

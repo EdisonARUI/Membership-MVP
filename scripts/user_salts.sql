@@ -1,32 +1,54 @@
--- 创建 zkLogin 用户盐值表
-create table if not exists zklogin_user_salts (
-  id uuid primary key default uuid_generate_v4(),
-  user_id uuid references auth.users(id),
-  provider text not null,
-  provider_user_id text not null,
-  audience text not null,
-  salt text not null,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now(),
-  unique(provider, provider_user_id, audience)
+/**
+ * User Salts Table Schema
+ * 
+ * This script creates the user_salts table for zkLogin functionality.
+ * The table stores unique salt values for each user's zkLogin authentication.
+ * 
+ * Features:
+ * - Unique salt per user
+ * - Automatic timestamp management
+ * - Row Level Security (RLS) policies
+ * - Indexes for performance optimization
+ */
+
+-- Create user_salts table
+CREATE TABLE IF NOT EXISTS user_salts (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),  -- Unique identifier for each salt record
+  user_id uuid REFERENCES auth.users(id) NOT NULL, -- Reference to auth.users table
+  salt text NOT NULL,                              -- Unique salt value for zkLogin
+  created_at timestamptz DEFAULT now(),            -- Record creation timestamp
+  updated_at timestamptz DEFAULT now()             -- Record last update timestamp
 );
 
--- 创建索引提高查询效率
-create index if not exists idx_zklogin_user_salts_provider on zklogin_user_salts(provider);
-create index if not exists idx_zklogin_user_salts_provider_user_id on zklogin_user_salts(provider_user_id);
-create index if not exists idx_zklogin_user_salts_user_id on zklogin_user_salts(user_id);
+-- Create indexes for performance optimization
+CREATE INDEX IF NOT EXISTS idx_user_salts_user_id ON user_salts(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_salts_created_at ON user_salts(created_at);
 
--- 启用 RLS
-alter table zklogin_user_salts enable row level security;
+-- Enable Row Level Security
+ALTER TABLE user_salts ENABLE ROW LEVEL SECURITY;
 
--- RLS 策略：允许已登录用户查询
-create policy "已登录用户可查询盐值"
-  on zklogin_user_salts for select
-  using (auth.role() = 'authenticated');
+-- Create RLS policies
+CREATE POLICY "Users can view their own salts"
+  ON user_salts
+  FOR SELECT
+  USING (auth.uid() = user_id);
 
--- ✅ 修复后的插入策略：使用 WITH CHECK 而非 USING
-create policy "服务角色可插入盐值"
-  on zklogin_user_salts for insert
-  with check (
-    auth.jwt() ->> 'role' in ('service_role', 'supabase_admin', 'authenticated')
-  );
+CREATE POLICY "Users can insert their own salts"
+  ON user_salts
+  FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+-- Function to automatically update timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger for automatic timestamp updates
+CREATE TRIGGER update_user_salts_updated_at
+  BEFORE UPDATE ON user_salts
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
