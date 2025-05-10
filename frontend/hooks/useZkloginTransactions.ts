@@ -1,3 +1,7 @@
+/**
+ * Hook for managing zkLogin transaction operations
+ * Provides functionality for signing and executing transactions with zkLogin credentials
+ */
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 import { SuiClient } from '@mysten/sui/client';
@@ -7,15 +11,39 @@ import { SUI_RPC_URL } from '@/config/client';
 
 type LogFunction = (message: string) => void;
 
+/**
+ * Hook for zkLogin transaction operations
+ * Handles transaction signing and execution using zkLogin authentication
+ * 
+ * @param {LogFunction} logFn - Optional function for logging transaction steps
+ * @returns {Object} Transaction operations
+ */
 export function useZkLoginTransactions(logFn?: LogFunction) {
-  // 内部日志函数
+  /**
+   * Internal logging function
+   * 
+   * @param {string} message - Message to log
+   * @private
+   */
   const log = (message: string) => {
     if (logFn) {
       logFn(message);
     }
   };
 
-  // 签名并提交交易
+  /**
+   * Signs and executes a transaction using zkLogin credentials
+   * Handles generating zkLogin signature and submitting to blockchain
+   * 
+   * @param {Transaction} txb - Transaction block to sign and execute
+   * @param {string} zkLoginAddress - zkLogin address of the sender
+   * @param {Ed25519Keypair} ephemeralKeyPair - Ephemeral keypair for signing
+   * @param {PartialZkLoginSignature} partialSignature - Partial zkLogin signature
+   * @param {string} userSalt - User's salt value
+   * @param {any} decodedJwt - Decoded JWT information
+   * @returns {Promise<any>} Transaction execution result
+   * @throws {Error} If transaction signing or execution fails
+   */
   async function signAndExecuteTransaction(
     txb: Transaction,
     zkLoginAddress: string,
@@ -24,22 +52,22 @@ export function useZkLoginTransactions(logFn?: LogFunction) {
     userSalt: string,
     decodedJwt: any
   ) {
-    log("准备使用zkLogin签名执行交易...");
+    log("Preparing to sign and execute transaction with zkLogin...");
     const client = new SuiClient({ url: SUI_RPC_URL });
     
-    // 设置发送者
+    // Set sender
     txb.setSender(zkLoginAddress);
-    log(`设置交易发送者: ${zkLoginAddress}`);
+    log(`Transaction sender set: ${zkLoginAddress}`);
     
-    // 使用临时密钥对签名
-    log("使用临时密钥对签名交易...");
+    // Sign with ephemeral keypair
+    log("Signing transaction with ephemeral keypair...");
     const { bytes, signature: userSignature } = await txb.sign({
       client,
       signer: ephemeralKeyPair,
     });
-    log("交易签名完成，准备生成地址种子");
+    log("Transaction signing complete, preparing to generate address seed");
     
-    // 生成地址种子
+    // Generate address seed
     try {
     const addressSeed = genAddressSeed(
       BigInt(userSalt), 
@@ -47,51 +75,51 @@ export function useZkLoginTransactions(logFn?: LogFunction) {
       decodedJwt.sub, 
       decodedJwt.aud
     ).toString();
-      log(`地址种子生成成功: ${addressSeed.substring(0, 10)}...`);
+      log(`Address seed generation successful: ${addressSeed.substring(0, 10)}...`);
       
-      // 参数验证和兼容处理
+      // Parameter validation and compatibility handling
       if (!partialSignature || !partialSignature.inputs) {
-        log("错误: 无效的 partialSignature 结构");
-        throw new Error("无效的 partialSignature 结构");
+        log("Error: Invalid partialSignature structure");
+        throw new Error("Invalid partialSignature structure");
       }
       
-      log("验证partialSignature结构...");
+      log("Validating partialSignature structure...");
       const { proofPoints, issBase64Details, headerBase64 } = partialSignature.inputs;
       
       if (!proofPoints) {
-        log("错误: partialSignature 缺少必要字段 proofPoints");
-        throw new Error("partialSignature 缺少必要字段 proofPoints");
+        log("Error: partialSignature missing required field proofPoints");
+        throw new Error("partialSignature missing required field proofPoints");
       }
       
       if (!issBase64Details) {
-        log("错误: partialSignature 缺少必要字段 issBase64Details");
-        throw new Error("partialSignature 缺少必要字段 issBase64Details");
+        log("Error: partialSignature missing required field issBase64Details");
+        throw new Error("partialSignature missing required field issBase64Details");
       }
       
       if (!headerBase64) {
-        log("错误: partialSignature 缺少必要字段 headerBase64");
-        throw new Error("partialSignature 缺少必要字段 headerBase64");
+        log("Error: partialSignature missing required field headerBase64");
+        throw new Error("partialSignature missing required field headerBase64");
       }
       
-      // 检查 issBase64Details 内部结构
+      // Check issBase64Details internal structure
       if (!issBase64Details.value) {
-        log("错误: issBase64Details 缺少必要字段 value");
-        throw new Error("issBase64Details 缺少必要字段 value");
+        log("Error: issBase64Details missing required field value");
+        throw new Error("issBase64Details missing required field value");
       }
       
       if (issBase64Details.indexMod4 === undefined) {
-        log("错误: issBase64Details 缺少必要字段 indexMod4");
-        throw new Error("issBase64Details 缺少必要字段 indexMod4");
+        log("Error: issBase64Details missing required field indexMod4");
+        throw new Error("issBase64Details missing required field indexMod4");
       }
       
-      // 检查 proofPoints 内部结构 
+      // Check proofPoints internal structure 
       if (!proofPoints.a || !proofPoints.b || !proofPoints.c) {
-        log("错误: proofPoints 结构不完整 (缺少 a, b 或 c)");
-        throw new Error("proofPoints 结构不完整");
+        log("Error: proofPoints structure incomplete (missing a, b, or c)");
+        throw new Error("proofPoints structure incomplete");
       }
       
-      log("序列化 zkLogin 签名...");
-      // 序列化 zkLogin 签名 - 按照最新文档格式修正
+      log("Serializing zkLogin signature...");
+      // Serialize zkLogin signature - corrected per latest documentation
     const zkLoginSignature = getZkLoginSignature({
       inputs: {
           ...partialSignature.inputs,
@@ -100,10 +128,10 @@ export function useZkLoginTransactions(logFn?: LogFunction) {
         maxEpoch: partialSignature.maxEpoch,
       userSignature,
     });
-      log("zkLogin签名序列化成功，准备执行交易");
+      log("zkLogin signature serialization successful, preparing to execute transaction");
     
-    // 执行交易
-      log("向链上提交交易...");
+    // Execute transaction
+      log("Submitting transaction to blockchain...");
       const result = await client.executeTransactionBlock({
       transactionBlock: bytes,
       signature: zkLoginSignature,
@@ -113,10 +141,10 @@ export function useZkLoginTransactions(logFn?: LogFunction) {
       }
     });
       
-      log(`交易执行完成，交易ID: ${result.digest}`);
+      log(`Transaction execution complete, transaction ID: ${result.digest}`);
       return result;
     } catch (error: any) {
-      log(`交易执行失败详情: ${JSON.stringify(error)}`);
+      log(`Transaction execution failure details: ${JSON.stringify(error)}`);
       throw error;
     }
   }

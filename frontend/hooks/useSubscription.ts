@@ -1,7 +1,17 @@
+/**
+ * Hook for managing subscription operations
+ * Provides functionality to fetch, create, update, and cancel user subscriptions
+ */
 import { useState, useEffect } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useLogContext } from '@/contexts/LogContext';
 
+/**
+ * Hook for managing user subscriptions
+ * Handles subscription CRUD operations via Supabase
+ * 
+ * @returns {Object} Subscription state and methods
+ */
 export function useSubscription() {
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
   const [activeSubscription, setActiveSubscription] = useState<any>(null);
@@ -9,7 +19,12 @@ export function useSubscription() {
   const { addLog } = useLogContext();
   const supabase = createClient();
 
-  // 获取用户订阅
+  /**
+   * Fetches user subscriptions from the database
+   * Gets all subscriptions and identifies the active one
+   * 
+   * @returns {Promise<void>}
+   */
   const fetchUserSubscriptions = async () => {
     try {
       setLoading(true);
@@ -23,19 +38,27 @@ export function useSubscription() {
       const active = data?.find(sub => sub.is_active);
       setActiveSubscription(active || null);
     } catch (error) {
-      console.error('获取订阅信息失败:', error);
-      addLog("错误: 获取订阅信息失败");
+      console.error('Failed to get subscription information:', error);
+      addLog("Error: Failed to get subscription information");
     } finally {
       setLoading(false);
     }
   };
 
-  // 创建订阅
+  /**
+   * Creates a new subscription for a user
+   * Handles plan selection, date calculation, and payment record creation
+   * 
+   * @param {string} planPeriod - Period of the subscription plan ('monthly', 'quarterly', 'yearly')
+   * @param {number} price - Price of the subscription
+   * @param {string} userId - ID of the user creating the subscription
+   * @returns {Promise<boolean>} Whether subscription creation was successful
+   */
   const createSubscription = async (planPeriod: string, price: number, userId: string) => {
     try {
       setLoading(true);
       
-      // 1. 获取选择的计划ID
+      // 1. Get selected plan ID
       const { data: planData, error: planError } = await supabase
         .from('subscription_plans')
         .select('id')
@@ -44,7 +67,7 @@ export function useSubscription() {
       
       if (planError) throw planError;
       
-      // 2. 计算日期
+      // 2. Calculate dates
       const startDate = new Date();
       const endDate = new Date();
       
@@ -60,7 +83,7 @@ export function useSubscription() {
           break;
       }
       
-      // 3. 创建订阅记录
+      // 3. Create subscription record
       const { data: subscriptionData, error: subscriptionError } = await supabase
         .from('user_subscriptions')
         .insert({
@@ -76,7 +99,7 @@ export function useSubscription() {
       
       if (subscriptionError) throw subscriptionError;
       
-      // 4. 创建支付记录
+      // 4. Create payment record
       const { error: paymentError } = await supabase
         .from('payment_transactions')
         .insert({
@@ -90,22 +113,29 @@ export function useSubscription() {
       
       if (paymentError) throw paymentError;
       
-      // 5. 刷新数据
+      // 5. Refresh data
       await fetchUserSubscriptions();
       
-      addLog(`订阅成功：您已成功订阅${planPeriod === 'monthly' ? '月付' : planPeriod === 'quarterly' ? '季付' : '年付'}计划`);
+      addLog(`Subscription successful: You have successfully subscribed to the ${planPeriod === 'monthly' ? 'monthly' : planPeriod === 'quarterly' ? 'quarterly' : 'yearly'} plan`);
       
       return true;
     } catch (error: any) {
-      console.error('创建订阅失败:', error);
-      addLog(`订阅失败: ${error.message || "创建订阅时发生错误"}`);
+      console.error('Failed to create subscription:', error);
+      addLog(`Subscription failed: ${error.message || "Error occurred while creating subscription"}`);
       return false;
     } finally {
       setLoading(false);
     }
   };
 
-  // 更新订阅（切换自动续订状态）
+  /**
+   * Updates subscription auto-renewal status
+   * Toggles between on and off for auto-renewal
+   * 
+   * @param {string} subscriptionId - ID of the subscription to update
+   * @param {boolean} currentAutoRenew - Current auto-renewal status
+   * @returns {Promise<boolean>} Whether the update was successful
+   */
   const toggleAutoRenew = async (subscriptionId: string, currentAutoRenew: boolean) => {
     try {
       setLoading(true);
@@ -120,18 +150,24 @@ export function useSubscription() {
       if (error) throw error;
       
       await fetchUserSubscriptions();
-      addLog(currentAutoRenew ? "已关闭自动续订" : "已开启自动续订");
+      addLog(currentAutoRenew ? "Auto-renewal has been disabled" : "Auto-renewal has been enabled");
       return true;
     } catch (error: any) {
-      console.error('更新订阅失败:', error);
-      addLog(`操作失败: ${error.message || "更新订阅时发生错误"}`);
+      console.error('Failed to update subscription:', error);
+      addLog(`Operation failed: ${error.message || "Error occurred while updating subscription"}`);
       return false;
     } finally {
       setLoading(false);
     }
   };
 
-  // 取消订阅
+  /**
+   * Cancels a subscription
+   * Updates status to 'canceled' and disables auto-renewal
+   * 
+   * @param {string} subscriptionId - ID of the subscription to cancel
+   * @returns {Promise<boolean>} Whether the cancellation was successful
+   */
   const cancelSubscription = async (subscriptionId: string) => {
     try {
       setLoading(true);
@@ -147,11 +183,11 @@ export function useSubscription() {
       if (error) throw error;
       
       await fetchUserSubscriptions();
-      addLog("订阅已取消");
+      addLog("Subscription has been canceled");
       return true;
     } catch (error: any) {
-      console.error('取消订阅失败:', error);
-      addLog(`操作失败: ${error.message || "取消订阅时发生错误"}`);
+      console.error('Failed to cancel subscription:', error);
+      addLog(`Operation failed: ${error.message || "Error occurred while canceling subscription"}`);
       return false;
     } finally {
       setLoading(false);

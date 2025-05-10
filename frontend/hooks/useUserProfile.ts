@@ -1,14 +1,30 @@
+/**
+ * Hook for managing user profile operations
+ * Provides CRUD functionality for user profile data
+ */
 import { useState, useEffect } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useLogContext } from '@/contexts/LogContext';
 
+/**
+ * Hook for managing user profile data
+ * Handles fetching, creating, and updating user profiles via Supabase
+ * 
+ * @returns {Object} User profile state and operations
+ */
 export function useUserProfile() {
   const [userProfile, setUserProfile] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const { addLog } = useLogContext();
   const supabase = createClient();
 
-  // 获取用户资料
+  /**
+   * Retrieves user profile data
+   * Fetches profile from database based on user ID
+   * 
+   * @param {string} userId - User ID to fetch profile for
+   * @returns {Promise<any|null>} User profile data or null if not found
+   */
   const fetchUserProfile = async (userId: string) => {
     try {
       setLoading(true);
@@ -23,15 +39,22 @@ export function useUserProfile() {
       setUserProfile(data);
       return data;
     } catch (error: any) {
-      console.error('获取用户资料失败:', error);
-      addLog(`错误: 获取用户资料失败 - ${error.message}`);
+      console.error('Failed to get user profile:', error);
+      addLog(`Error: Failed to get user profile - ${error.message}`);
       return null;
     } finally {
       setLoading(false);
     }
   };
 
-  // 更新用户资料
+  /**
+   * Updates user profile data
+   * Applies partial updates to existing profile
+   * 
+   * @param {string} userId - User ID of the profile to update
+   * @param {any} updates - Object containing fields to update
+   * @returns {Promise<any|null>} Updated profile data or null if update failed
+   */
   const updateUserProfile = async (userId: string, updates: any) => {
     try {
       setLoading(true);
@@ -45,18 +68,25 @@ export function useUserProfile() {
       if (error) throw error;
 
       setUserProfile(data);
-      addLog("用户资料更新成功");
+      addLog("User profile updated successfully");
       return data;
     } catch (error: any) {
-      console.error('更新用户资料失败:', error);
-      addLog(`错误: 更新用户资料失败 - ${error.message}`);
+      console.error('Failed to update user profile:', error);
+      addLog(`Error: Failed to update user profile - ${error.message}`);
       return null;
     } finally {
       setLoading(false);
     }
   };
 
-  // 创建用户资料
+  /**
+   * Creates a new user profile
+   * Initializes profile record with user ID and provided data
+   * 
+   * @param {string} userId - User ID to create profile for
+   * @param {any} profileData - Initial profile data
+   * @returns {Promise<any|null>} Created profile data or null if creation failed
+   */
   const createUserProfile = async (userId: string, profileData: any) => {
     try {
       setLoading(true);
@@ -72,18 +102,25 @@ export function useUserProfile() {
       if (error) throw error;
 
       setUserProfile(data);
-      addLog("用户资料创建成功");
+      addLog("User profile created successfully");
       return data;
     } catch (error: any) {
-      console.error('创建用户资料失败:', error);
-      addLog(`错误: 创建用户资料失败 - ${error.message}`);
+      console.error('Failed to create user profile:', error);
+      addLog(`Error: Failed to create user profile - ${error.message}`);
       return null;
     } finally {
       setLoading(false);
     }
   };
 
-  // 更新用户头像
+  /**
+   * Updates user avatar URL
+   * Specialized method for updating just the avatar image
+   * 
+   * @param {string} userId - User ID of the profile to update
+   * @param {string} avatarUrl - New avatar image URL
+   * @returns {Promise<any|null>} Updated profile data or null if update failed
+   */
   const updateUserAvatar = async (userId: string, avatarUrl: string) => {
     try {
       setLoading(true);
@@ -97,11 +134,11 @@ export function useUserProfile() {
       if (error) throw error;
 
       setUserProfile(data);
-      addLog("用户头像更新成功");
+      addLog("User avatar updated successfully");
       return data;
     } catch (error: any) {
-      console.error('更新用户头像失败:', error);
-      addLog(`错误: 更新用户头像失败 - ${error.message}`);
+      console.error('Failed to update user avatar:', error);
+      addLog(`Error: Failed to update user avatar - ${error.message}`);
       return null;
     } finally {
       setLoading(false);

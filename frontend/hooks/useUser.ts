@@ -1,16 +1,30 @@
+/**
+ * Hook for managing user authentication state
+ * Provides current user information and authentication status
+ */
 "use client";
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 
+/**
+ * Hook for tracking authenticated user
+ * Handles user session management via Supabase auth
+ * 
+ * @returns {Object} User state and loading status
+ */
 export function useUser() {
   const [user, setUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const supabase = createClient();
   
   useEffect(() => {
+    /**
+     * Fetches current user session or user data
+     * First checks session storage, then falls back to getUser API
+     */
     const fetchUser = async () => {
-      // 先从存储中检查会话
+      // First check session from storage
       const { data: sessionData } = await supabase.auth.getSession();
       if (sessionData?.session?.user) {
         setUser(sessionData.session.user);
@@ -18,7 +32,7 @@ export function useUser() {
         return;
       }
       
-      // 再尝试获取用户
+      // Then try to get user
       const { data, error } = await supabase.auth.getUser();
       if (!error && data.user) {
         setUser(data.user);
@@ -28,6 +42,7 @@ export function useUser() {
     
     fetchUser();
     
+    // Set up auth state change listener
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (session?.user) {
@@ -39,6 +54,7 @@ export function useUser() {
       }
     );
     
+    // Clean up auth listener on unmount
     return () => {
       authListener.subscription.unsubscribe();
     };

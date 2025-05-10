@@ -1,3 +1,7 @@
+/**
+ * Hook for managing zkLogin parameters
+ * Provides functionality for retrieving and validating zkLogin authentication parameters
+ */
 import { useCallback } from 'react';
 import { ZkLoginStorage } from '@/utils/StorageService';
 import { SuiService } from '@/utils/SuiService';
@@ -6,66 +10,72 @@ import { PartialZkLoginSignature } from '@/interfaces/ZkLogin';
 import { useLogContext } from '@/contexts/LogContext';
 
 /**
- * zkLogin参数管理Hook
- * 提供获取和验证zkLogin所需参数的方法
+ * Hook for managing zkLogin parameters
+ * Handles retrieval and validation of zkLogin authentication parameters
+ * 
+ * @returns {Object} zkLogin parameter management functions
  */
 export function useZkLoginParams() {
   const { addLog } = useLogContext();
 
   /**
-   * 准备临时密钥对
-   * @returns 临时密钥对或null
+   * Prepares ephemeral keypair for zkLogin
+   * Retrieves and reconstructs the ephemeral keypair from storage
+   * 
+   * @returns {Ed25519Keypair|null} Reconstructed ephemeral keypair or null if not found
    */
   const prepareKeypair = useCallback((): Ed25519Keypair | null => {
     const ephemeralKeypairData = ZkLoginStorage.getEphemeralKeypair();
     if (!ephemeralKeypairData) {
-      addLog("找不到临时密钥对，无法完成操作");
+      addLog("Ephemeral keypair not found, operation cannot be completed");
       return null;
     }
 
-    // 重建密钥对
+    // Reconstruct keypair
     try {
       return SuiService.recreateKeypairFromStored(ephemeralKeypairData.keypair);
     } catch (error: any) {
-      addLog(`重建密钥对失败: ${error.message}`);
+      addLog(`Failed to reconstruct keypair: ${error.message}`);
       return null;
     }
   }, [addLog]);
 
   /**
-   * 获取zkLogin所需的所有参数
-   * @returns zkLogin参数对象或null
+   * Retrieves all required zkLogin parameters
+   * Fetches zkLogin address, partial signature, user salt, and decoded JWT
+   * 
+   * @returns {Object|null} Object containing all zkLogin parameters or null if any parameter is missing
    */
   const getZkLoginParams = useCallback(() => {
-    // 获取zkLogin地址
+    // Get zkLogin address
     const zkLoginAddress = ZkLoginStorage.getZkLoginAddress();
     if (!zkLoginAddress) {
-      addLog("未找到zkLogin地址");
+      addLog("zkLogin address not found");
       return null;
     }
 
-    // 获取部分签名
+    // Get partial signature
     const partialSignature = ZkLoginStorage.getZkLoginPartialSignature();
     if (!partialSignature) {
-      addLog("未找到zkLogin部分签名");
+      addLog("zkLogin partial signature not found");
       return null;
     }
 
-    // 获取用户盐值
+    // Get user salt
     const userSalt = ZkLoginStorage.getZkLoginUserSalt();
     if (!userSalt) {
-      addLog("未找到用户盐值");
+      addLog("User salt not found");
       return null;
     }
 
-    // 获取解码的JWT
+    // Get decoded JWT
     const decodedJwt = ZkLoginStorage.getDecodedJwt();
     if (!decodedJwt) {
-      addLog("未找到解码的JWT");
+      addLog("Decoded JWT not found");
       return null;
     }
 
-    // 验证所有参数都已获取
+    // Verify all parameters are retrieved
     return {
       zkLoginAddress,
       partialSignature,
@@ -75,22 +85,24 @@ export function useZkLoginParams() {
   }, [addLog]);
 
   /**
-   * 验证参数有效性
-   * @param address zkLogin地址
-   * @param userId 用户ID
-   * @returns 是否有效
+   * Validates zkLogin parameters
+   * Checks if address and user ID meet required format and presence criteria
+   * 
+   * @param {string} address - zkLogin address to validate
+   * @param {string} userId - User ID to validate
+   * @returns {boolean} Whether parameters are valid
    */
   const validateParams = useCallback((address: string, userId: string): boolean => {
-    addLog(`验证参数 - 用户ID: ${userId}, 类型: ${typeof userId}`);
-    addLog(`验证参数 - zkLogin地址: ${address}`);
+    addLog(`Validating parameters - User ID: ${userId}, Type: ${typeof userId}`);
+    addLog(`Validating parameters - zkLogin address: ${address}`);
 
     if (!address || !address.startsWith('0x')) {
-      addLog("错误: 无效的zkLogin地址格式");
+      addLog("Error: Invalid zkLogin address format");
       return false;
     }
 
     if (!userId) {
-      addLog("错误: 无效的用户ID");
+      addLog("Error: Invalid user ID");
       return false;
     }
 
