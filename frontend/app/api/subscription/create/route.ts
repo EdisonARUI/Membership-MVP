@@ -1,44 +1,88 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 
+/**
+ * RESTful API Endpoint for Creating Subscription
+ * 
+ * @api {post} /api/subscription/create Create New Subscription
+ * @apiName CreateSubscription
+ * @apiGroup Subscription
+ * @apiVersion 1.0.0
+ * 
+ * @apiHeader {String} Authorization User's authentication token
+ * 
+ * @apiBody {String} plan_id ID of the subscription plan
+ * @apiBody {String} tx_hash Transaction hash for payment verification
+ * @apiBody {Boolean} [auto_renew] Whether to enable auto-renewal
+ * @apiBody {String} [contract_object_id] Optional contract object ID
+ * 
+ * @apiSuccess {Boolean} success Indicates if the request was successful
+ * @apiSuccess {Object} subscription Created subscription details
+ * 
+ * @apiError (400) {Boolean} success Always false
+ * @apiError (400) {String} error Error message for missing parameters
+ * 
+ * @apiError (401) {Boolean} success Always false
+ * @apiError (401) {String} error Unauthorized access message
+ * 
+ * @apiError (500) {Boolean} success Always false
+ * @apiError (500) {String} error Error message for subscription creation failure
+ * 
+ * @apiExample {curl} Example usage:
+ *     curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+ *     -d '{"plan_id":"123","tx_hash":"0x...","auto_renew":true}' \
+ *     http://localhost:3000/api/subscription/create
+ * 
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 200 OK
+ *     {
+ *       "success": true,
+ *       "subscription": {
+ *         "id": "123",
+ *         "plan_name": "Premium",
+ *         "plan_period": "monthly",
+ *         ...
+ *       }
+ *     }
+ */
 export async function POST(request: Request) {
-  console.log('📝 [API] 创建订阅接口请求开始');
+  console.log('📝 [API] Create subscription request started');
   
   try {
-    console.log('📝 [API] 创建Supabase客户端');
-    // 创建Supabase客户端
+    console.log('📝 [API] Creating Supabase client');
+    // Create Supabase client
     const supabase = await createClient();
     
-    console.log('📝 [API] 开始获取当前用户信息');
-    // 获取当前用户信息
+    console.log('📝 [API] Getting current user information');
+    // Get current user information
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
-      console.log('❌ [API] 未授权访问: 未找到用户信息');
+      console.log('❌ [API] Unauthorized access: User not found');
       return NextResponse.json({ 
         success: false, 
-        error: '未授权访问' 
+        error: 'Unauthorized access' 
       }, { status: 401 });
     }
     
     const requestData = await request.json();
     const { plan_id, tx_hash, auto_renew } = requestData;
-    console.log(`📝 [API] 请求参数: plan_id=${plan_id}, tx_hash=${tx_hash?.substring(0, 8)}..., auto_renew=${auto_renew}`);
+    console.log(`📝 [API] Request parameters: plan_id=${plan_id}, tx_hash=${tx_hash?.substring(0, 8)}..., auto_renew=${auto_renew}`);
     
-    // 验证必要参数
+    // Validate required parameters
     if (!plan_id || !tx_hash) {
-      console.log('❌ [API] 参数验证失败: 缺少必要参数');
+      console.log('❌ [API] Parameter validation failed: Missing required parameters');
       return NextResponse.json({ 
         success: false, 
-        error: '缺少必要参数' 
+        error: 'Missing required parameters' 
       }, { status: 400 });
     }
     
     const userId = user.id;
-    console.log(`📝 [API] 用户ID: ${userId}`);
+    console.log(`📝 [API] User ID: ${userId}`);
     
-    console.log(`📝 [API] 第1步: 开始获取计划详情 plan_id=${plan_id}`);
-    // 1. 获取计划详情
+    console.log(`📝 [API] Step 1: Getting plan details plan_id=${plan_id}`);
+    // 1. Get plan details
     const { data: plan, error: planError } = await supabase
       .from('subscription_plans')
       .select('*')
@@ -46,18 +90,18 @@ export async function POST(request: Request) {
       .single();
     
     if (planError) {
-      console.error('❌ [API] 获取计划详情失败:', planError);
-      console.error('❌ [API] 错误详情:', JSON.stringify(planError, null, 2));
+      console.error('❌ [API] Failed to get plan details:', planError);
+      console.error('❌ [API] Error details:', JSON.stringify(planError, null, 2));
       return NextResponse.json({
         success: false, 
-        error: `获取计划详情失败: ${planError.message}`
+        error: `Failed to get plan details: ${planError.message}`
       }, { status: 500 });
     }
     
-    console.log(`📝 [API] 已获取计划详情: ${plan.name}, 价格: ${plan.price}, 周期: ${plan.period}`);
+    console.log(`📝 [API] Plan details retrieved: ${plan.name}, Price: ${plan.price}, Period: ${plan.period}`);
     
-    console.log('📝 [API] 第2步: 计算订阅日期');
-    // 2. 计算日期
+    console.log('📝 [API] Step 2: Calculating subscription dates');
+    // 2. Calculate dates
     const startDate = new Date();
     const endDate = new Date();
     
@@ -73,10 +117,10 @@ export async function POST(request: Request) {
         break;
     }
     
-    console.log(`📝 [API] 订阅日期: 开始=${startDate.toISOString()}, 结束=${endDate.toISOString()}`);
+    console.log(`📝 [API] Subscription dates: Start=${startDate.toISOString()}, End=${endDate.toISOString()}`);
     
-    console.log('📝 [API] 第3步: 创建订阅记录');
-    // 3. 创建订阅记录
+    console.log('📝 [API] Step 3: Creating subscription record');
+    // 3. Create subscription record
     const { data: subscription, error: subscriptionError } = await supabase
       .from('user_subscriptions')
       .insert({
@@ -92,18 +136,18 @@ export async function POST(request: Request) {
       .single();
     
     if (subscriptionError) {
-      console.error('❌ [API] 创建订阅记录失败:', subscriptionError);
-      console.error('❌ [API] 错误详情:', JSON.stringify(subscriptionError, null, 2));
+      console.error('❌ [API] Failed to create subscription record:', subscriptionError);
+      console.error('❌ [API] Error details:', JSON.stringify(subscriptionError, null, 2));
       return NextResponse.json({
         success: false, 
-        error: `创建订阅记录失败: ${subscriptionError.message}`
+        error: `Failed to create subscription record: ${subscriptionError.message}`
       }, { status: 500 });
     }
     
-    console.log(`📝 [API] 订阅记录创建成功: ID=${subscription.id}`);
+    console.log(`📝 [API] Subscription record created successfully: ID=${subscription.id}`);
     
-    console.log('📝 [API] 第4步: 创建支付记录');
-    // 4. 创建支付记录
+    console.log('📝 [API] Step 4: Creating payment record');
+    // 4. Create payment record
     const { error: paymentError } = await supabase
       .from('payment_transactions')
       .insert({
@@ -117,18 +161,18 @@ export async function POST(request: Request) {
       });
     
     if (paymentError) {
-      console.error('❌ [API] 创建支付记录失败:', paymentError);
-      console.error('❌ [API] 错误详情:', JSON.stringify(paymentError, null, 2));
+      console.error('❌ [API] Failed to create payment record:', paymentError);
+      console.error('❌ [API] Error details:', JSON.stringify(paymentError, null, 2));
       return NextResponse.json({
         success: false, 
-        error: `创建支付记录失败: ${paymentError.message}`
+        error: `Failed to create payment record: ${paymentError.message}`
       }, { status: 500 });
     }
     
-    console.log('📝 [API] 支付记录创建成功');
+    console.log('📝 [API] Payment record created successfully');
     
-    // 5. 返回结果
-    console.log('✅ [API] 创建订阅成功，准备返回结果');
+    // 5. Return result
+    console.log('✅ [API] Subscription created successfully, preparing response');
     return NextResponse.json({
       success: true,
       subscription: {
@@ -139,11 +183,11 @@ export async function POST(request: Request) {
     });
     
   } catch (error: any) {
-    console.error('❌ [API] 创建订阅API错误:', error);
-    console.error('❌ [API] 错误调用栈:', error.stack);
+    console.error('❌ [API] Create subscription API error:', error);
+    console.error('❌ [API] Error stack:', error.stack);
     return NextResponse.json({
       success: false, 
-      error: `创建订阅API错误: ${error.message}`
+      error: `Create subscription API error: ${error.message}`
     }, { status: 500 });
   }
 } 

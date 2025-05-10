@@ -3,70 +3,103 @@ import { createClient } from '@/utils/supabase/server';
 import { DepositRecord, DepositRecordsResponse } from '@/interfaces/Deposit';
 
 /**
- * 充值历史记录API
+ * RESTful API Endpoint for Deposit Records
  * 
- * GET /api/deposit/records
+ * @api {get} /api/deposit/records Get Deposit Records
+ * @apiName GetDepositRecords
+ * @apiGroup Deposit
+ * @apiVersion 1.0.0
  * 
- * 查询参数:
- * - limit: 返回记录数量限制
- * - user: 指定用户地址
- * - page: 分页页码（从1开始）
+ * @apiQuery {Number} [limit=10] Number of records to return
+ * @apiQuery {String} [user] Optional user address to filter records
+ * @apiQuery {Number} [page=1] Page number for pagination (starts from 1)
+ * 
+ * @apiSuccess {Boolean} success Indicates if the request was successful
+ * @apiSuccess {Array} records List of deposit records
+ * @apiSuccess {Number} total_count Total number of records
+ * @apiSuccess {Number} total_amount Total deposit amount
+ * 
+ * @apiError (500) {Boolean} success Always false
+ * @apiError (500) {String} error Error message for records retrieval failure
+ * 
+ * @apiExample {curl} Example usage:
+ *     # Get all records with default pagination
+ *     curl -X GET http://localhost:3000/api/deposit/records
+ *     
+ *     # Get records for a specific user
+ *     curl -X GET "http://localhost:3000/api/deposit/records?user=0x...&limit=20&page=1"
+ * 
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 200 OK
+ *     {
+ *       "success": true,
+ *       "records": [
+ *         {
+ *           "user_address": "0x...",
+ *           "tx_hash": "0x...",
+ *           "amount": 100,
+ *           "created_at": "2024-03-20T10:00:00Z"
+ *         }
+ *       ],
+ *       "total_count": 1,
+ *       "total_amount": 100
+ *     }
  */
 export async function GET(req: NextRequest): Promise<NextResponse<DepositRecordsResponse>> {
   try {
-    console.log('📥 GET /api/deposit/records - 开始处理获取充值记录请求');
+    console.log('📥 GET /api/deposit/records - Processing deposit records request');
     
-    // 获取查询参数
+    // Get query parameters
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get('limit') || '10');
     const user = searchParams.get('user');
     const page = parseInt(searchParams.get('page') || '1');
     
-    console.log(`📋 查询参数: limit=${limit}, user=${user}, page=${page}`);
+    console.log(`📋 Query parameters: limit=${limit}, user=${user}, page=${page}`);
     
-    // 计算偏移量，用于分页
+    // Calculate offset for pagination
     const offset = (page - 1) * limit;
     
-    // 创建Supabase客户端
+    // Create Supabase client
     const supabase = await createClient();
-    console.log('🔌 Supabase客户端创建成功');
+    console.log('🔌 Supabase client created successfully');
     
-    // 构建查询
+    // Build query
     let query = supabase
       .from('deposit_records')
       .select('*')
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
     
-    // 如果指定了用户地址
+    // Filter by user address if specified
     if (user) {
       query = query.eq('user_address', user);
     }
     
-    console.log(`🔍 执行查询: ${user ? `user_address=${user}` : '所有记录'}`);
+    console.log(`🔍 Executing query: ${user ? `user_address=${user}` : 'all records'}`);
     
-    // 执行查询
+    // Execute query
     const { data, error } = await query;
     
     if (error) {
-      console.error('❌ 获取充值记录失败:', error);
+      console.error('❌ Failed to get deposit records:', error);
       return NextResponse.json<DepositRecordsResponse>({
         success: false,
-        error: `获取充值记录失败: ${error.message}`
+        error: `Failed to get deposit records: ${error.message}`
       }, { status: 500 });
     }
     
-    console.log(`✅ 查询成功，获取到 ${data?.length || 0} 条记录`);
+    console.log(`✅ Query successful, retrieved ${data?.length || 0} records`);
     
-    // 计算总计金额和总数
+    // Calculate total amount and count
     let total_amount = 0;
     if (data) {
       total_amount = data.reduce((sum, record) => sum + record.amount, 0);
     }
     
-    console.log(`📊 总计金额: ${total_amount}, 总记录数: ${data?.length || 0}`);
+    console.log(`📊 Total amount: ${total_amount}, Total records: ${data?.length || 0}`);
     
-    // 返回数据
+    // Return data
     return NextResponse.json<DepositRecordsResponse>({
       success: true,
       records: data as DepositRecord[],
@@ -74,79 +107,104 @@ export async function GET(req: NextRequest): Promise<NextResponse<DepositRecords
       total_amount: total_amount
     }, { status: 200 });
   } catch (error: any) {
-    // 返回请求处理错误响应
-    console.error('❌ 处理充值历史记录请求失败:', error);
+    // Return error response
+    console.error('❌ Failed to process deposit records request:', error);
     return NextResponse.json<DepositRecordsResponse>({ 
       success: false,
-      error: `获取充值历史记录失败: ${error.message}` 
+      error: `Failed to get deposit records: ${error.message}` 
     }, { status: 500 });
   }
 }
 
 /**
- * 添加充值记录API
+ * RESTful API Endpoint for Creating Deposit Records
  * 
- * POST /api/deposit/records
+ * @api {post} /api/deposit/records Create Deposit Record
+ * @apiName CreateDepositRecord
+ * @apiGroup Deposit
+ * @apiVersion 1.0.0
  * 
- * 请求体:
- * - user_address: 用户地址
- * - tx_hash: 交易哈希
- * - amount: 充值金额
+ * @apiBody {String} user_address User's wallet address
+ * @apiBody {String} tx_hash Transaction hash for verification
+ * @apiBody {Number} amount Deposit amount
+ * 
+ * @apiSuccess {Boolean} success Indicates if the request was successful
+ * @apiSuccess {String} recordId ID of the created deposit record
+ * @apiSuccess {Number} amount Deposit amount
+ * 
+ * @apiError (400) {Boolean} success Always false
+ * @apiError (400) {String} error Error message for missing or invalid parameters
+ * 
+ * @apiError (500) {Boolean} success Always false
+ * @apiError (500) {String} error Error message for record creation failure
+ * 
+ * @apiExample {curl} Example usage:
+ *     curl -X POST -H "Content-Type: application/json" \
+ *     -d '{"user_address":"0x...","tx_hash":"0x...","amount":100}' \
+ *     http://localhost:3000/api/deposit/records
+ * 
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 201 Created
+ *     {
+ *       "success": true,
+ *       "recordId": "dep_123",
+ *       "amount": 100
+ *     }
  */
 export async function POST(request: Request): Promise<NextResponse> {
   try {
-    console.log('📥 POST /api/deposit/records - 开始处理添加充值记录请求');
+    console.log('📥 POST /api/deposit/records - Processing create deposit record request');
     
     const body = await request.json();
-    console.log('📦 请求数据:', JSON.stringify(body, null, 2));
+    console.log('📦 Request data:', JSON.stringify(body, null, 2));
     
     const { user_address, tx_hash, amount } = body;
     
-    // 验证必要参数
+    // Validate required parameters
     if (!user_address || !tx_hash || amount === undefined) {
-      console.error('❌ 参数验证失败:', { user_address, tx_hash, amount });
+      console.error('❌ Parameter validation failed:', { user_address, tx_hash, amount });
       return NextResponse.json({ 
         success: false, 
-        error: '请提供必要的参数' 
+        error: 'Please provide all required parameters' 
       }, { status: 400 });
     }
     
-    console.log('✅ 参数验证通过:', { user_address, tx_hash, amount });
+    console.log('✅ Parameter validation passed:', { user_address, tx_hash, amount });
     
-    // 数据类型验证
+    // Validate data types
     if (typeof user_address !== 'string' || typeof tx_hash !== 'string' || typeof amount !== 'number') {
-      console.error('❌ 数据类型验证失败:', { 
+      console.error('❌ Data type validation failed:', { 
         user_address_type: typeof user_address, 
         tx_hash_type: typeof tx_hash, 
         amount_type: typeof amount 
       });
       return NextResponse.json({ 
         success: false, 
-        error: '参数类型错误' 
+        error: 'Invalid parameter types' 
       }, { status: 400 });
     }
     
-    console.log('✅ 数据类型验证通过');
+    console.log('✅ Data type validation passed');
     
-    // 创建Supabase客户端
+    // Create Supabase client
     const supabase = await createClient();
-    console.log('🔌 Supabase客户端创建成功');
+    console.log('🔌 Supabase client created successfully');
     
-    // 数据转换（确保amount是bigint）
+    // Convert amount to bigint
     const parsedAmount = BigInt(amount);
-    console.log(`🔄 转换amount: ${amount} -> ${parsedAmount}`);
+    console.log(`🔄 Converting amount: ${amount} -> ${parsedAmount}`);
     
-    // 构建插入数据
+    // Prepare record data
     const recordData = {
       user_address,
       tx_hash,
-      amount: Number(parsedAmount), // 转回number，因为Supabase不直接支持BigInt
+      amount: Number(parsedAmount), // Convert back to number for Supabase
       created_at: new Date().toISOString()
     };
     
-    console.log('📝 准备插入数据:', recordData);
+    console.log('📝 Preparing to insert data:', recordData);
     
-    // 插入充值记录
+    // Insert deposit record
     const { data, error } = await supabase
       .from('deposit_records')
       .insert(recordData)
@@ -154,14 +212,14 @@ export async function POST(request: Request): Promise<NextResponse> {
       .single();
     
     if (error) {
-      console.error('❌ 记录充值失败:', error);
+      console.error('❌ Failed to create deposit record:', error);
       return NextResponse.json({ 
         success: false, 
-        error: `记录充值失败: ${error.message}` 
+        error: `Failed to create deposit record: ${error.message}` 
       }, { status: 500 });
     }
     
-    console.log('✅ 充值记录添加成功:', data);
+    console.log('✅ Deposit record created successfully:', data);
     
     return NextResponse.json({ 
       success: true, 
@@ -170,10 +228,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     }, { status: 201 });
     
   } catch (error: any) {
-    console.error('❌ 处理充值记录请求失败:', error, error.stack);
+    console.error('❌ Failed to process deposit record request:', error, error.stack);
     return NextResponse.json({ 
       success: false, 
-      error: `记录充值失败: ${error.message}` 
+      error: `Failed to create deposit record: ${error.message}` 
     }, { status: 500 });
   }
 }

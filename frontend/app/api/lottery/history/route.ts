@@ -3,70 +3,99 @@ import { createClient } from '@/utils/supabase/server';
 import { LotteryRecord, LotteryHistoryResponse } from '@/interfaces/Lottery';
 
 /**
- * 抽奖历史记录API
+ * RESTful API Endpoint for Lottery History
  * 
- * GET /api/lottery/history
+ * @api {get} /api/lottery/history Get Lottery History
+ * @apiName GetLotteryHistory
+ * @apiGroup Lottery
+ * @apiVersion 1.0.0
  * 
- * 查询参数:
- * - limit: 返回记录数量限制
- * - player: 指定玩家地址
- * - winners_only: 是否只返回中奖记录
- * - page: 分页页码（从1开始）
+ * @apiQuery {Number} [limit=10] Number of records to return
+ * @apiQuery {String} [player] Optional player address to filter records
+ * @apiQuery {Boolean} [winners_only=false] Whether to return only winning records
+ * @apiQuery {Number} [page=1] Page number for pagination (starts from 1)
+ * 
+ * @apiSuccess {Boolean} success Indicates if the request was successful
+ * @apiSuccess {Array} records List of lottery records
+ * 
+ * @apiError (500) {Boolean} success Always false
+ * @apiError (500) {String} error Error message for history retrieval failure
+ * 
+ * @apiExample {curl} Example usage:
+ *     # Get all records with default pagination
+ *     curl -X GET http://localhost:3000/api/lottery/history
+ *     
+ *     # Get winning records for a specific player
+ *     curl -X GET "http://localhost:3000/api/lottery/history?player=0x...&winners_only=true&limit=20&page=1"
+ * 
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 200 OK
+ *     {
+ *       "success": true,
+ *       "records": [
+ *         {
+ *           "player_address": "0x...",
+ *           "tx_hash": "0x...",
+ *           "win_amount": 100,
+ *           "created_at": "2024-03-20T10:00:00Z"
+ *         }
+ *       ]
+ *     }
  */
 export async function GET(req: NextRequest): Promise<NextResponse<LotteryHistoryResponse>> {
   try {
-    // 获取查询参数
+    // Get query parameters
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get('limit') || '10');
     const player = searchParams.get('player');
     const winnersOnly = searchParams.get('winners_only') === 'true';
     const page = parseInt(searchParams.get('page') || '1');
     
-    // 计算偏移量，用于分页
+    // Calculate offset for pagination
     const offset = (page - 1) * limit;
     
-    // 创建Supabase客户端
+    // Create Supabase client
     const supabase = await createClient();
     
-    // 构建查询
+    // Build query
     let query = supabase
       .from('lottery_records')
       .select('*')
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
     
-    // 如果指定了玩家地址
+    // Filter by player address if specified
     if (player) {
       query = query.eq('player_address', player);
     }
     
-    // 如果只查询中奖记录
+    // Filter winning records if requested
     if (winnersOnly) {
       query = query.gt('win_amount', 0);
     }
     
-    // 执行查询
+    // Execute query
     const { data, error } = await query;
     
     if (error) {
-      console.error('获取抽奖记录失败:', error);
+      console.error('Failed to get lottery records:', error);
       return NextResponse.json<LotteryHistoryResponse>({
         success: false,
-        error: `获取抽奖记录失败: ${error.message}`
+        error: `Failed to get lottery records: ${error.message}`
       }, { status: 500 });
     }
     
-    // 返回数据
+    // Return data
     return NextResponse.json<LotteryHistoryResponse>({
       success: true,
       records: data as LotteryRecord[],
     }, { status: 200 });
   } catch (error: any) {
-    // 返回请求处理错误响应
-    console.error('处理抽奖历史记录请求失败:', error);
+    // Return error response
+    console.error('Failed to process lottery history request:', error);
     return NextResponse.json<LotteryHistoryResponse>({ 
       success: false,
-      error: `获取抽奖历史记录失败: ${error.message}` 
+      error: `Failed to get lottery history: ${error.message}` 
     }, { status: 500 });
   }
 } 

@@ -1,44 +1,88 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 
+/**
+ * RESTful API Endpoint for Updating Auto-Renewal Status
+ * 
+ * @api {post} /api/subscription/auto-renew Update Auto-Renewal Status
+ * @apiName UpdateAutoRenewal
+ * @apiGroup Subscription
+ * @apiVersion 1.0.0
+ * 
+ * @apiHeader {String} Authorization User's authentication token
+ * 
+ * @apiBody {String} subscription_id ID of the subscription to update
+ * @apiBody {Boolean} auto_renew New auto-renewal status
+ * 
+ * @apiSuccess {Boolean} success Indicates if the request was successful
+ * @apiSuccess {Object} subscription Updated subscription details
+ * 
+ * @apiError (400) {Boolean} success Always false
+ * @apiError (400) {String} error Error message for missing parameters
+ * 
+ * @apiError (401) {Boolean} success Always false
+ * @apiError (401) {String} error Unauthorized access message
+ * 
+ * @apiError (403) {Boolean} success Always false
+ * @apiError (403) {String} error Error message for unauthorized subscription access
+ * 
+ * @apiError (500) {Boolean} success Always false
+ * @apiError (500) {String} error Error message for auto-renewal update failure
+ * 
+ * @apiExample {curl} Example usage:
+ *     curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+ *     -d '{"subscription_id":"123","auto_renew":true}' \
+ *     http://localhost:3000/api/subscription/auto-renew
+ * 
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 200 OK
+ *     {
+ *       "success": true,
+ *       "subscription": {
+ *         "id": "123",
+ *         "auto_renew": true,
+ *         ...
+ *       }
+ *     }
+ */
 export async function POST(request: Request) {
-  console.log('📝 [API] 更新自动续订状态接口请求开始');
+  console.log('📝 [API] Update auto-renewal status request started');
   
   try {
-    console.log('📝 [API] 创建Supabase客户端');
-    // 创建Supabase客户端
+    console.log('📝 [API] Creating Supabase client');
+    // Create Supabase client
     const supabase = await createClient();
     
-    console.log('📝 [API] 开始获取当前用户信息');
-    // 获取当前用户信息
+    console.log('📝 [API] Getting current user information');
+    // Get current user information
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
-      console.log('❌ [API] 未授权访问: 未找到用户信息');
+      console.log('❌ [API] Unauthorized access: User not found');
       return NextResponse.json({ 
         success: false, 
-        error: '未授权访问' 
+        error: 'Unauthorized access' 
       }, { status: 401 });
     }
     
     const requestData = await request.json();
     const { subscription_id, auto_renew } = requestData;
-    console.log(`📝 [API] 请求参数: subscription_id=${subscription_id}, auto_renew=${auto_renew}`);
+    console.log(`📝 [API] Request parameters: subscription_id=${subscription_id}, auto_renew=${auto_renew}`);
     
-    // 验证必要参数
+    // Validate required parameters
     if (!subscription_id || auto_renew === undefined) {
-      console.log('❌ [API] 参数验证失败: 缺少必要参数');
+      console.log('❌ [API] Parameter validation failed: Missing required parameters');
       return NextResponse.json({ 
         success: false, 
-        error: '缺少必要参数' 
+        error: 'Missing required parameters' 
       }, { status: 400 });
     }
     
     const userId = user.id;
-    console.log(`📝 [API] 用户ID: ${userId}`);
+    console.log(`📝 [API] User ID: ${userId}`);
     
-    console.log(`📝 [API] 第1步: 开始验证订阅归属, subscription_id=${subscription_id}`);
-    // 1. 先验证订阅是否属于当前用户
+    console.log(`📝 [API] Step 1: Verifying subscription ownership, subscription_id=${subscription_id}`);
+    // 1. Verify subscription ownership
     const { data: existingSubscription, error: checkError } = await supabase
       .from('user_subscriptions')
       .select('*')
@@ -46,21 +90,21 @@ export async function POST(request: Request) {
       .eq('user_id', userId)
       .single();
     
-    console.log(`📝 [API] 验证结果: 成功=${!checkError}, 数据=${existingSubscription ? '已找到' : '未找到'}`);
+    console.log(`📝 [API] Verification result: success=${!checkError}, data=${existingSubscription ? 'found' : 'not found'}`);
     
     if (checkError || !existingSubscription) {
-      console.error('❌ [API] 验证订阅归属失败:', checkError);
-      console.error('❌ [API] 错误详情:', JSON.stringify(checkError, null, 2));
+      console.error('❌ [API] Subscription ownership verification failed:', checkError);
+      console.error('❌ [API] Error details:', JSON.stringify(checkError, null, 2));
       return NextResponse.json({
         success: false, 
-        error: '无权操作该订阅或订阅不存在'
+        error: 'Unauthorized to access this subscription or subscription does not exist'
       }, { status: 403 });
     }
     
-    console.log(`📝 [API] 订阅验证通过, 订阅ID=${subscription_id}, 当前自动续订状态=${existingSubscription.auto_renew}`);
+    console.log(`📝 [API] Subscription verified, ID=${subscription_id}, Current auto-renewal status=${existingSubscription.auto_renew}`);
     
-    console.log(`📝 [API] 第2步: 更新自动续订状态为 ${auto_renew}`);
-    // 2. 更新自动续订状态
+    console.log(`📝 [API] Step 2: Updating auto-renewal status to ${auto_renew}`);
+    // 2. Update auto-renewal status
     const { data: subscription, error } = await supabase
       .from('user_subscriptions')
       .update({ auto_renew })
@@ -69,16 +113,16 @@ export async function POST(request: Request) {
       .single();
     
     if (error) {
-      console.error('❌ [API] 更新自动续订状态失败:', error);
-      console.error('❌ [API] 错误详情:', JSON.stringify(error, null, 2));
+      console.error('❌ [API] Failed to update auto-renewal status:', error);
+      console.error('❌ [API] Error details:', JSON.stringify(error, null, 2));
       return NextResponse.json({
         success: false, 
-        error: `更新自动续订状态失败: ${error.message}`
+        error: `Failed to update auto-renewal status: ${error.message}`
       }, { status: 500 });
     }
     
-    console.log(`📝 [API] 自动续订状态更新成功, ID=${subscription.id}, 新状态=${subscription.auto_renew}`);
-    console.log('✅ [API] 更新自动续订成功，准备返回结果');
+    console.log(`📝 [API] Auto-renewal status updated successfully, ID=${subscription.id}, New status=${subscription.auto_renew}`);
+    console.log('✅ [API] Auto-renewal update successful, preparing response');
     
     return NextResponse.json({
       success: true,
@@ -88,11 +132,11 @@ export async function POST(request: Request) {
     });
     
   } catch (error: any) {
-    console.error('❌ [API] 更新自动续订状态API错误:', error);
-    console.error('❌ [API] 错误调用栈:', error.stack);
+    console.error('❌ [API] Update auto-renewal status API error:', error);
+    console.error('❌ [API] Error stack:', error.stack);
     return NextResponse.json({
       success: false, 
-      error: `更新自动续订状态API错误: ${error.message}`
+      error: `Update auto-renewal status API error: ${error.message}`
     }, { status: 500 });
   }
 } 

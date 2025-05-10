@@ -2,32 +2,55 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 
 /**
- * 记录抽奖结果API
+ * RESTful API Endpoint for Lottery Records
  * 
- * POST /api/lottery/records
+ * @api {post} /api/lottery/records Create Lottery Record
+ * @apiName CreateLotteryRecord
+ * @apiGroup Lottery
+ * @apiVersion 1.0.0
  * 
- * 请求体:
- * - player_address: 玩家地址
- * - tx_hash: 交易哈希
- * - win_amount: 中奖金额
+ * @apiBody {String} player_address Player's wallet address
+ * @apiBody {String} tx_hash Transaction hash for verification
+ * @apiBody {Number} [win_amount=0] Amount won in the lottery
+ * 
+ * @apiSuccess {Boolean} success Indicates if the request was successful
+ * @apiSuccess {String} message Success message
+ * 
+ * @apiError (400) {Boolean} success Always false
+ * @apiError (400) {String} error Error message for missing parameters
+ * 
+ * @apiError (500) {Boolean} success Always false
+ * @apiError (500) {String} error Error message for record creation failure
+ * 
+ * @apiExample {curl} Example usage:
+ *     curl -X POST -H "Content-Type: application/json" \
+ *     -d '{"player_address":"0x...","tx_hash":"0x...","win_amount":100}' \
+ *     http://localhost:3000/api/lottery/records
+ * 
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 201 Created
+ *     {
+ *       "success": true,
+ *       "message": "Lottery record saved"
+ *     }
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
-    // 解析请求体
+    // Parse request body
     const { player_address, tx_hash, win_amount = 0 } = await req.json();
     
-    // 输入验证
+    // Input validation
     if (!player_address || !tx_hash) {
       return NextResponse.json({ 
         success: false, 
-        error: '缺少必要参数: player_address, tx_hash' 
+        error: 'Missing required parameters: player_address, tx_hash' 
       }, { status: 400 });
     }
     
-    // 创建Supabase客户端
+    // Create Supabase client
     const supabase = await createClient();
     
-    // 保存抽奖记录
+    // Save lottery record
     const { error } = await supabase
       .from('lottery_records')
       .insert({
@@ -37,24 +60,24 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     });
     
     if (error) {
-      console.error('保存抽奖记录失败:', error);
+      console.error('Failed to save lottery record:', error);
       return NextResponse.json({ 
         success: false, 
-        error: `保存抽奖记录失败: ${error.message}` 
+        error: `Failed to save lottery record: ${error.message}` 
       }, { status: 500 });
     }
     
-    // 返回成功响应
+    // Return success response
     return NextResponse.json({
       success: true,
-      message: '抽奖记录已保存'
-    }, { status: 201 });  // 使用201表示资源创建成功
+      message: 'Lottery record saved'
+    }, { status: 201 });  // Use 201 for resource creation success
   } catch (error: any) {
-    // 返回请求处理错误响应
-    console.error('处理抽奖记录请求失败:', error);
+    // Return error response
+    console.error('Failed to process lottery record request:', error);
     return NextResponse.json({ 
       success: false,
-      error: `保存抽奖记录失败: ${error.message}` 
+      error: `Failed to save lottery record: ${error.message}` 
     }, { status: 500 });
   }
 } 

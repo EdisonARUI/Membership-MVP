@@ -1,3 +1,11 @@
+/**
+ * API_ENDPOINTS defines all RESTful API endpoints used in the application.
+ * Organizes endpoints for zkLogin, SUI, lottery, deposit, and subscription modules.
+ *
+ * Features:
+ * - Centralized endpoint management for all API routes
+ * - Grouped by module for clarity and maintainability
+ */
 export const API_ENDPOINTS = {
 
   ZKLOGIN: {
@@ -8,7 +16,6 @@ export const API_ENDPOINTS = {
     },
     USER: {
       SALT: '/api/zklogin/users/salt',
-      BIND: '/api/zklogin/users/bind'
     },
     PROOF: '/api/zklogin/proofs'
   },
@@ -21,7 +28,6 @@ export const API_ENDPOINTS = {
     STATS: '/api/lottery/stats'
   },
   DEPOSIT: {
-    MINT: '/api/deposit/mint',
     RECORDS: '/api/deposit/records'
   },
   SUBSCRIPTION: {

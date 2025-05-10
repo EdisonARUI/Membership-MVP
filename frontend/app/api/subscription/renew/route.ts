@@ -1,44 +1,94 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 
+/**
+ * RESTful API Endpoint for Subscription Renewal
+ * 
+ * @api {post} /api/subscription/renew Renew Subscription
+ * @apiName RenewSubscription
+ * @apiGroup Subscription
+ * @apiVersion 1.0.0
+ * 
+ * @apiHeader {String} Authorization User's authentication token
+ * 
+ * @apiBody {String} subscription_id ID of the subscription to renew
+ * @apiBody {String} tx_hash Transaction hash for payment verification
+ * 
+ * @apiSuccess {Boolean} success Indicates if the request was successful
+ * @apiSuccess {Object} subscription Updated subscription details
+ * @apiSuccess {String} subscription.plan_name Name of the subscription plan
+ * @apiSuccess {String} subscription.plan_period Period of the subscription plan
+ * 
+ * @apiError (401) {Boolean} success Always false
+ * @apiError (401) {String} error Error message for unauthorized access
+ * 
+ * @apiError (400) {Boolean} success Always false
+ * @apiError (400) {String} error Error message for missing parameters
+ * 
+ * @apiError (403) {Boolean} success Always false
+ * @apiError (403) {String} error Error message for subscription ownership validation failure
+ * 
+ * @apiError (500) {Boolean} success Always false
+ * @apiError (500) {String} error Error message for subscription renewal failure
+ * 
+ * @apiExample {curl} Example usage:
+ *     curl -X POST -H "Authorization: Bearer <token>" \
+ *     -H "Content-Type: application/json" \
+ *     -d '{"subscription_id":"sub_123","tx_hash":"0x..."}' \
+ *     http://localhost:3000/api/subscription/renew
+ * 
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 200 OK
+ *     {
+ *       "success": true,
+ *       "subscription": {
+ *         "id": "sub_123",
+ *         "status": "active",
+ *         "start_date": "2024-03-20T10:00:00Z",
+ *         "end_date": "2024-04-20T10:00:00Z",
+ *         "plan_name": "Premium",
+ *         "plan_period": "monthly"
+ *       }
+ *     }
+ */
 export async function POST(request: Request) {
-  console.log('📝 [API] 续订订阅接口请求开始');
+  console.log('📝 [API] Subscription renewal request started');
   
   try {
-    console.log('📝 [API] 创建Supabase客户端');
-    // 创建Supabase客户端
+    console.log('📝 [API] Creating Supabase client');
+    // Create Supabase client
     const supabase = await createClient();
     
-    console.log('📝 [API] 开始获取当前用户信息');
-    // 获取当前用户信息
+    console.log('📝 [API] Getting current user information');
+    // Get current user information
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
-      console.log('❌ [API] 未授权访问: 未找到用户信息');
+      console.log('❌ [API] Unauthorized access: User not found');
       return NextResponse.json({ 
         success: false, 
-        error: '未授权访问' 
+        error: 'Unauthorized access' 
       }, { status: 401 });
     }
     
     const requestData = await request.json();
     const { subscription_id, tx_hash } = requestData;
-    console.log(`📝 [API] 请求参数: subscription_id=${subscription_id}, tx_hash=${tx_hash?.substring(0, 8)}...`);
+    console.log(`📝 [API] Request parameters: subscription_id=${subscription_id}, tx_hash=${tx_hash?.substring(0, 8)}...`);
     
-    // 验证必要参数
+    // Validate required parameters
     if (!subscription_id || !tx_hash) {
-      console.log('❌ [API] 参数验证失败: 缺少必要参数');
+      console.log('❌ [API] Parameter validation failed: Missing required parameters');
       return NextResponse.json({ 
         success: false, 
-        error: '缺少必要参数' 
+        error: 'Missing required parameters' 
       }, { status: 400 });
     }
     
     const userId = user.id;
-    console.log(`📝 [API] 用户ID: ${userId}`);
+    console.log(`📝 [API] User ID: ${userId}`);
     
-    console.log(`📝 [API] 第1步: 开始验证订阅归属, subscription_id=${subscription_id}`);
-    // 1. 先验证订阅是否属于当前用户
+    console.log(`📝 [API] Step 1: Validating subscription ownership, subscription_id=${subscription_id}`);
+    // 1. Verify if the subscription belongs to the current user
     const { data: existingSubscription, error: checkError } = await supabase
       .from('user_subscriptions')
       .select('*, subscription_plans!inner(*)')
@@ -47,17 +97,17 @@ export async function POST(request: Request) {
       .single();
     
     if (checkError || !existingSubscription) {
-      console.error('❌ [API] 验证订阅归属失败:', checkError);
+      console.error('❌ [API] Subscription ownership validation failed:', checkError);
       return NextResponse.json({
         success: false, 
-        error: '无权操作该订阅或订阅不存在'
+        error: 'No permission to operate this subscription or subscription does not exist'
       }, { status: 403 });
     }
     
-    console.log(`📝 [API] 订阅验证通过, 订阅ID=${subscription_id}, 计划=${existingSubscription.subscription_plans.name}`);
+    console.log(`📝 [API] Subscription validation passed, ID=${subscription_id}, Plan=${existingSubscription.subscription_plans.name}`);
     
-    console.log('📝 [API] 第2步: 计算新的到期日期');
-    // 2. 计算新的到期日期
+    console.log('📝 [API] Step 2: Calculating new expiration date');
+    // 2. Calculate new expiration date
     const plan = existingSubscription.subscription_plans;
     const startDate = new Date();
     const endDate = new Date();
@@ -74,10 +124,10 @@ export async function POST(request: Request) {
         break;
     }
     
-    console.log(`📝 [API] 新的订阅日期: 开始=${startDate.toISOString()}, 结束=${endDate.toISOString()}`);
+    console.log(`📝 [API] New subscription dates: start=${startDate.toISOString()}, end=${endDate.toISOString()}`);
     
-    console.log('📝 [API] 第3步: 更新订阅状态');
-    // 3. 更新订阅状态
+    console.log('📝 [API] Step 3: Updating subscription status');
+    // 3. Update subscription status
     const { data: subscription, error: updateError } = await supabase
       .from('user_subscriptions')
       .update({
@@ -90,18 +140,18 @@ export async function POST(request: Request) {
       .single();
     
     if (updateError) {
-      console.error('❌ [API] 更新订阅状态失败:', updateError);
-      console.error('❌ [API] 错误详情:', JSON.stringify(updateError, null, 2));
+      console.error('❌ [API] Failed to update subscription status:', updateError);
+      console.error('❌ [API] Error details:', JSON.stringify(updateError, null, 2));
       return NextResponse.json({
         success: false, 
-        error: `更新订阅状态失败: ${updateError.message}`
+        error: `Failed to update subscription status: ${updateError.message}`
       }, { status: 500 });
     }
     
-    console.log(`📝 [API] 订阅状态更新成功, ID=${subscription.id}, 新状态=active`);
+    console.log(`📝 [API] Subscription status updated successfully, ID=${subscription.id}, New status=active`);
     
-    console.log('📝 [API] 第4步: 创建支付记录');
-    // 4. 创建支付记录
+    console.log('📝 [API] Step 4: Creating payment record');
+    // 4. Create payment record
     const { error: paymentError } = await supabase
       .from('payment_transactions')
       .insert({
@@ -115,16 +165,16 @@ export async function POST(request: Request) {
       });
     
     if (paymentError) {
-      console.error('❌ [API] 创建支付记录失败:', paymentError);
-      console.error('❌ [API] 错误详情:', JSON.stringify(paymentError, null, 2));
+      console.error('❌ [API] Failed to create payment record:', paymentError);
+      console.error('❌ [API] Error details:', JSON.stringify(paymentError, null, 2));
       return NextResponse.json({
         success: false, 
-        error: `创建支付记录失败: ${paymentError.message}`
+        error: `Failed to create payment record: ${paymentError.message}`
       }, { status: 500 });
     }
     
-    console.log('📝 [API] 支付记录创建成功');
-    console.log('✅ [API] 订阅续订成功，准备返回结果');
+    console.log('📝 [API] Payment record created successfully');
+    console.log('✅ [API] Subscription renewal successful, preparing response');
     
     return NextResponse.json({
       success: true,
@@ -136,11 +186,11 @@ export async function POST(request: Request) {
     });
     
   } catch (error: any) {
-    console.error('❌ [API] 续订订阅API错误:', error);
-    console.error('❌ [API] 错误调用栈:', error.stack);
+    console.error('❌ [API] Subscription renewal API error:', error);
+    console.error('❌ [API] Error stack trace:', error.stack);
     return NextResponse.json({
       success: false, 
-      error: `续订订阅API错误: ${error.message}`
+      error: `Subscription renewal API error: ${error.message}`
     }, { status: 500 });
   }
 } 

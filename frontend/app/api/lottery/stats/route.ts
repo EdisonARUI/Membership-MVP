@@ -3,25 +3,51 @@ import { createClient } from '@/utils/supabase/server';
 import { LotteryStats } from '@/interfaces/Lottery';
 
 /**
- * 抽奖统计数据API
+ * RESTful API Endpoint for Lottery Statistics
  * 
- * GET /api/lottery/stats
+ * @api {get} /api/lottery/stats Get Lottery Statistics
+ * @apiName GetLotteryStats
+ * @apiGroup Lottery
+ * @apiVersion 1.0.0
  * 
- * 查询参数:
- * - player: 指定玩家地址（可选，如不提供则返回全局统计）
- * - period: 统计周期（可选，支持 all/week/month/day，默认all）
+ * @apiQuery {String} [player] Optional player address to get specific player stats
+ * @apiQuery {String} [period] Time period for statistics (all/week/month/day, default: all)
+ * 
+ * @apiSuccess {Boolean} success Indicates if the request was successful
+ * @apiSuccess {Number} total_count Total number of lottery records
+ * @apiSuccess {Number} total_amount Total winning amount
+ * @apiSuccess {Number} win_count Total number of winning records
+ * 
+ * @apiError (500) {Boolean} success Always false
+ * @apiError (500) {String} error Error message for statistics retrieval failure
+ * 
+ * @apiExample {curl} Example usage:
+ *     # Get global statistics
+ *     curl -X GET http://localhost:3000/api/lottery/stats
+ *     
+ *     # Get player statistics for the last week
+ *     curl -X GET "http://localhost:3000/api/lottery/stats?player=0x...&period=week"
+ * 
+ * @apiSuccessExample {json} Success-Response:
+ *     HTTP/1.1 200 OK
+ *     {
+ *       "success": true,
+ *       "total_count": 100,
+ *       "total_amount": 5000,
+ *       "win_count": 10
+ *     }
  */
 export async function GET(req: NextRequest): Promise<NextResponse<LotteryStats>> {
   try {
-    // 获取查询参数
+    // Get query parameters
     const { searchParams } = new URL(req.url);
     const player = searchParams.get('player');
     const period = searchParams.get('period') || 'all';
     
-    // 创建Supabase客户端
+    // Create Supabase client
     const supabase = await createClient();
     
-    // 构建时间范围条件
+    // Build time range constraint
     let timeConstraint = '';
     const now = new Date();
     if (period === 'day') {
@@ -37,12 +63,12 @@ export async function GET(req: NextRequest): Promise<NextResponse<LotteryStats>>
       timeConstraint = `created_at >= '${monthStart}'`;
     }
     
-    // 获取总记录数
+    // Get total record count
     let countQuery = supabase
       .from('lottery_records')
       .select('*', { count: 'exact' });
     
-    // 根据条件筛选
+    // Apply filters
     if (player) {
       countQuery = countQuery.eq('player_address', player);
     }
@@ -54,14 +80,14 @@ export async function GET(req: NextRequest): Promise<NextResponse<LotteryStats>>
     const { count, error: countError } = await countQuery;
     
     if (countError) {
-      console.error('获取统计数据失败:', countError);
+      console.error('Failed to get statistics:', countError);
       return NextResponse.json<LotteryStats>({
         success: false,
-        error: `获取统计数据失败: ${countError.message}`
+        error: `Failed to get statistics: ${countError.message}`
       }, { status: 500 });
     }
     
-    // 获取中奖记录数
+    // Get winning record count
     let winCountQuery = supabase
       .from('lottery_records')
       .select('*', { count: 'exact' })
@@ -78,10 +104,10 @@ export async function GET(req: NextRequest): Promise<NextResponse<LotteryStats>>
     const { count: winCount, error: winCountError } = await winCountQuery;
     
     if (winCountError) {
-      console.error('获取中奖统计数据失败:', winCountError);
+      console.error('Failed to get winning statistics:', winCountError);
     }
     
-    // 获取总中奖金额
+    // Get total winning amount
     let sumQuery = supabase
       .from('lottery_records')
       .select('win_amount');
@@ -97,15 +123,15 @@ export async function GET(req: NextRequest): Promise<NextResponse<LotteryStats>>
     const { data: sumData, error: sumError } = await sumQuery;
     
     if (sumError) {
-      console.error('获取总中奖金额失败:', sumError);
+      console.error('Failed to get total winning amount:', sumError);
     }
     
-    // 手动计算总和
+    // Calculate total amount manually
     const totalAmount = sumData 
       ? sumData.reduce((sum, record) => sum + (record.win_amount || 0), 0) 
       : 0;
     
-    // 返回统计数据 (移除win_rate字段)
+    // Return statistics (removed win_rate field)
     return NextResponse.json<LotteryStats>({
       success: true,
       total_count: count || 0,
@@ -113,11 +139,11 @@ export async function GET(req: NextRequest): Promise<NextResponse<LotteryStats>>
       win_count: winCount || 0
     }, { status: 200 });
   } catch (error: any) {
-    // 返回请求处理错误响应
-    console.error('处理抽奖统计数据请求失败:', error);
+    // Return error response
+    console.error('Failed to process lottery statistics request:', error);
     return NextResponse.json<LotteryStats>({ 
       success: false,
-      error: `获取抽奖统计数据失败: ${error.message}` 
+      error: `Failed to get lottery statistics: ${error.message}` 
     }, { status: 500 });
   }
 } 
