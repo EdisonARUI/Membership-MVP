@@ -1,3 +1,7 @@
+/**
+ * Service for zkLogin authentication flow 
+ * Manages the zkLogin process including JWT handling, salt retrieval, and zero-knowledge proof generation
+ */
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { AppStorage } from './StorageService';
 import { SuiService } from './SuiService';
@@ -11,36 +15,42 @@ import { API_ENDPOINTS } from '../app/api/endpoints';
 import { api } from '../app/api/clients';
 import { AppError } from '../interfaces/Error';
 
-// 日志回调函数类型
+// Log callback function type
 type LogCallback = (message: string) => void;
 
+/**
+ * Service for managing zkLogin authentication process
+ * Handles JWT processing, salt retrieval, and zkLogin signature generation
+ */
 export class ZkLoginService {
-  // 静态日志回调
+  // Static log callback
   private static logCallback: LogCallback | null = null;
   
   /**
-   * 设置日志回调函数
-   * @param callback 日志回调函数
+   * Sets log callback function
+   * @param {LogCallback} callback - The log callback function
    */
   static setLogCallback(callback: LogCallback): void {
     this.logCallback = callback;
   }
   
   /**
-   * 输出日志
-   * @param message 日志消息
+   * Outputs log message
+   * @param {string} message - The log message
+   * @private
    */
   private static log(message: string): void {
-    // 如果设置了回调，调用回调
+    // If callback is set, call it
     if (this.logCallback) {
       this.logCallback(message);
     }
   }
 
   /**
-   * 解析JWT令牌
-   * @param jwt JWT令牌
-   * @returns 解析后的JWT载荷
+   * Parses JWT token
+   * @param {string} jwt - JWT token to parse
+   * @returns {any} Parsed JWT payload
+   * @throws {Error} If JWT parsing fails
    */
   static parseJwt(jwt: string): any {
     try {
@@ -51,67 +61,74 @@ export class ZkLoginService {
   }
 
   /**
-   * 初始化 zkLogin 流程
-   * 创建临时密钥对并保存
-   * @param forceNew 是否强制创建新密钥对
-   * @returns 创建的临时密钥对和 nonce
+   * Initializes zkLogin process
+   * Creates ephemeral keypair and saves it
+   * 
+   * @param {boolean} forceNew - Whether to force creation of new keypair
+   * @returns {Promise<{ keypair: any, nonce: string }>} Created ephemeral keypair and nonce
+   * @throws {Error} If keypair creation fails
    */
   static async initialize(forceNew: boolean = false): Promise<{ keypair: any, nonce: string }> {
     try {
-      this.log("开始创建临时密钥对...");
+      this.log("Starting to create ephemeral keypair...");
       
       if (!SuiService) {
-        this.log("SuiService未定义");
-        throw new Error("SuiService未定义");
+        this.log("SuiService is undefined");
+        throw new Error("SuiService is undefined");
       }
       
       if (!SuiService.createEphemeralKeyPair) {
-        this.log("SuiService.createEphemeralKeyPair方法未定义");
-        throw new Error("createEphemeralKeyPair方法未定义");
+        this.log("SuiService.createEphemeralKeyPair method is undefined");
+        throw new Error("createEphemeralKeyPair method is undefined");
       }
       
       const keypair = await SuiService.createEphemeralKeyPair()
         .catch(error => {
-          this.log(`SuiService.createEphemeralKeyPair执行失败: ${error.message}`);
-          throw new Error(`创建密钥对失败: ${error.message || '未知错误'}`);
+          this.log(`SuiService.createEphemeralKeyPair execution failed: ${error.message}`);
+          throw new Error(`Failed to create keypair: ${error.message || 'Unknown error'}`);
         });
       
       if (!keypair || !keypair.nonce) {
-        this.log("创建的临时密钥对无效");
-        throw new Error("创建的临时密钥对无效");
+        this.log("Created ephemeral keypair is invalid");
+        throw new Error("Created ephemeral keypair is invalid");
       }
       
-      this.log(`临时密钥对创建成功, nonce: ${keypair.nonce}`);
+      this.log(`Ephemeral keypair created successfully, nonce: ${keypair.nonce}`);
       
       return {
         keypair,
         nonce: keypair.nonce
       };
     } catch (error: any) {
-      this.log(`准备密钥对失败: ${error.message || '未知错误'}`);
-      throw error instanceof Error ? error : new Error(`准备密钥对失败: ${error?.message || '未知错误'}`);
+      this.log(`Keypair preparation failed: ${error.message || 'Unknown error'}`);
+      throw error instanceof Error ? error : new Error(`Keypair preparation failed: ${error?.message || 'Unknown error'}`);
     }
   }
 
   /**
-   * 获取用户盐值
+   * Fetches user salt value from API
+   * 
+   * @param {string} jwt - JWT token to use for salt retrieval
+   * @param {string} keyClaimName - Key claim name to use (default: 'sub')
+   * @returns {Promise<string>} User salt value
+   * @throws {AppError} If salt retrieval fails
    */
   static async fetchUserSalt(jwt: string, keyClaimName: string = 'sub'): Promise<string> {
     try {
-      this.log("开始获取用户盐值...");
+      this.log("Starting to fetch user salt...");
       const response = await api.post<{ salt: string }>(
         API_ENDPOINTS.ZKLOGIN.USER.SALT,
         { jwt, keyClaimName }
       );
       
       if (!response.success || !response.data?.salt) {
-        this.log("获取盐值失败");
+        this.log("Failed to get salt");
         
-        // 检查是否有错误详情中包含响应文本
-        let errorMessage = response.error?.message || '获取用户盐值失败';
+        // Check if error details include response text
+        let errorMessage = response.error?.message || 'Failed to get user salt';
         if (response.error?.details?.responseText) {
-          this.log(`错误响应内容: ${response.error.details.contentType || '未知'}`);
-          errorMessage += ` - 非预期的响应格式: ${response.error.details.contentType || '未知'}`;
+          this.log(`Error response content: ${response.error.details.contentType || 'Unknown'}`);
+          errorMessage += ` - Unexpected response format: ${response.error.details.contentType || 'Unknown'}`;
         }
         
         throw AppError.fromApiError(response.error || {
@@ -121,16 +138,25 @@ export class ZkLoginService {
         });
       }
       
-      this.log(`获取用户盐值成功: ${response.data.salt.substring(0, 10)}...`);
+      this.log(`User salt retrieval successful: ${response.data.salt.substring(0, 10)}...`);
       return response.data.salt;
     } catch (error: any) {
-      this.log(`获取盐值请求失败: ${error.message || '未知错误'}`);
-      throw error; // 让上层处理这个错误
+      this.log(`Salt retrieval request failed: ${error.message || 'Unknown error'}`);
+      throw error; // Let upper layer handle this error
     }
   }
 
   /**
-   * 获取ZKP（零知识证明）
+   * Gets ZKP (Zero Knowledge Proof)
+   * 
+   * @param {string} jwt - JWT token
+   * @param {Ed25519Keypair} ephemeralKeypair - Ephemeral keypair
+   * @param {string} userSalt - User salt value
+   * @param {string} jwtRandomness - JWT randomness
+   * @param {number} maxEpoch - Maximum epoch
+   * @param {('mainnet' | 'testnet' | 'devnet')} networkType - Network type (default: 'devnet')
+   * @returns {Promise<PartialZkLoginSignature>} The zkLogin partial signature
+   * @throws {AppError} If proof retrieval fails
    */
   static async getZkProof(
     jwt: string,
@@ -141,7 +167,7 @@ export class ZkLoginService {
     networkType: 'mainnet' | 'testnet' | 'devnet' = 'devnet'
   ): Promise<PartialZkLoginSignature> {
     try {
-      this.log("开始获取ZKP（零知识证明）...");
+      this.log("Starting to get ZKP (Zero Knowledge Proof)...");
       const ephemeralPublicKey = ephemeralKeypair.getPublicKey().toBase64();
             
       const requestBody: ZkProofRequestBody = {
@@ -153,20 +179,20 @@ export class ZkLoginService {
         maxEpoch
       };
       
-      // 使用集中化的API定义和请求工具
+      // Use centralized API definition and request tools
       const response = await api.post<{ proof: PartialZkLoginSignature }>(
         API_ENDPOINTS.ZKLOGIN.PROOF, 
         requestBody
       );
       
       if (!response.success || !response.data?.proof) {
-        this.log("获取ZKP失败");
+        this.log("Failed to get ZKP");
         
-        // 检查是否有错误详情中包含响应文本
-        let errorMessage = response.error?.message || '获取ZKP失败';
+        // Check if error details include response text
+        let errorMessage = response.error?.message || 'Failed to get ZKP';
         if (response.error?.details?.responseText) {
-          this.log(`错误响应内容: ${response.error.details.contentType || '未知'}`);
-          errorMessage += ` - 非预期的响应格式: ${response.error.details.contentType || '未知'}`;
+          this.log(`Error response content: ${response.error.details.contentType || 'Unknown'}`);
+          errorMessage += ` - Unexpected response format: ${response.error.details.contentType || 'Unknown'}`;
         }
         
         throw AppError.fromApiError(response.error || {
@@ -176,87 +202,87 @@ export class ZkLoginService {
         });
       }
       
-      this.log("获取ZKP成功");
+      this.log("ZKP retrieval successful");
       return response.data.proof;
     } catch (error: any) {
-      this.log(`获取ZKP请求失败: ${error.message || '未知错误'}`);
-      throw error; // 让上层处理这个错误
+      this.log(`ZKP request failed: ${error.message || 'Unknown error'}`);
+      throw error; // Let upper layer handle this error
     }
   }
 
   /**
-   * 激活地址
+   * Activates address
    */
   static async activateAddress(address: string): Promise<void> {
     try {
-      this.log(`开始激活地址: ${address}`);
+      this.log(`Starting to activate address: ${address}`);
       await SuiService.activateAddress(address);
-      this.log(`地址激活请求已发送: ${address}`);
+      this.log(`Address activation request sent: ${address}`);
     } catch (error: any) {
-      this.log(`尝试激活地址失败: ${error.message || '未知错误'}`);
-      // 继续执行不中断流程
+      this.log(`Failed to activate address: ${error.message || 'Unknown error'}`);
+      // Continue execution without interruption
     }
   }
 
   /**
-   * 检查并获取临时密钥对
+   * Checks and gets ephemeral keypair
    * @private
    */
   private static checkAndGetEphemeralKeyPair(): Ed25519Keypair {
     const ephemeralKeypair = AppStorage.getEphemeralKeypair()?.keypair;
       if (!ephemeralKeypair) {
-      this.log("找不到临时密钥对，无法处理JWT");
-        throw new Error("找不到临时密钥对，无法处理JWT");
+      this.log("Ephemeral keypair not found, cannot process JWT");
+        throw new Error("Ephemeral keypair not found, cannot process JWT");
       }
       
-      // 重建密钥对
+      // Recreate keypair
     return SuiService.recreateKeypairFromStored(ephemeralKeypair);
   }
 
   /**
-   * 解析并存储JWT
+   * Parses and stores JWT
    * @private
    */
   private static parseAndStoreJwt(jwt: string): any {
       const payload = this.parseJwt(jwt);
-    this.log(`JWT解析成功: sub=${payload.sub}, iss=${payload.iss}`);
+    this.log(`JWT parsing successful: sub=${payload.sub}, iss=${payload.iss}`);
       
-      // 存储解析后的JWT
+      // Store parsed JWT
       AppStorage.setDecodedJwt(payload);
     return payload;
   }
 
   /**
-   * 获取或获取用户盐值
+   * Gets or gets user salt value
    * @private
    */
   private static async getOrFetchUserSalt(jwt: string): Promise<string> {
       let userSalt = AppStorage.getZkLoginUserSalt();
       if (!userSalt) {
         try {
-        this.log("本地未找到盐值，从API获取...");
+        this.log("Local salt not found, fetching from API...");
           userSalt = await this.fetchUserSalt(jwt);
           AppStorage.setZkLoginUserSalt(userSalt);
-        this.log(`获取用户盐值成功: ${userSalt.substring(0, 10)}...`);
+        this.log(`User salt retrieval successful: ${userSalt.substring(0, 10)}...`);
         } catch (saltError: any) {
-        this.log(`获取盐值时发生错误: ${saltError.message || '未知错误'}`);
+        this.log(`Error occurred while getting salt: ${saltError.message || 'Unknown error'}`);
           
-          // 尝试记录响应内容
+          // Try recording response content
           if (saltError.responseText) {
-          this.log("错误响应内容可用，记录详情");
+          this.log("Error response content available, recording details");
           }
           
-          throw new Error(`获取用户盐值失败: ${saltError.message}`);
+          throw new Error(`Failed to get user salt: ${saltError.message}`);
         }
     } else {
-      this.log("使用本地存储的盐值");
+      this.log("Using local stored salt");
       }
       
     return userSalt;
   }
       
   /**
-   * 获取并处理JWT随机性和最大纪元
+   * Gets and processes JWT randomness and maximum epoch
    * @private
    */
   private static getJwtParams(): { jwtRandomness: string, maxEpoch: number } {
@@ -264,15 +290,15 @@ export class ZkLoginService {
         ? JSON.parse(AppStorage.getZkLoginOriginalRandomness()!)
         : '';
         
-      // 获取 maxEpoch
+      // Get maxEpoch
       const maxEpoch = parseInt(AppStorage.getZkLoginOriginalMaxEpoch() || '2');
-    this.log(`使用maxEpoch: ${maxEpoch}`);
+    this.log(`Using maxEpoch: ${maxEpoch}`);
 
     return { jwtRandomness, maxEpoch };
   }
 
   /**
-   * 获取并存储ZKP证明
+   * Gets and stores ZKP proof
    * @private
    */
   private static async getAndStoreProof(
@@ -283,7 +309,7 @@ export class ZkLoginService {
     maxEpoch: number
   ): Promise<PartialZkLoginSignature> {
     try {
-      this.log("开始获取零知识证明...");
+      this.log("Starting to get zero knowledge proof...");
       const proofResponse = await this.getZkProof(
         jwt, 
         keypair, 
@@ -292,48 +318,48 @@ export class ZkLoginService {
         maxEpoch
       );
         
-        // 存储结果
+        // Store result
         AppStorage.setZkLoginPartialSignature(proofResponse);
       return proofResponse;
       } catch (proofError: any) {
-      this.log(`获取ZKP证明时发生错误: ${proofError.message || '未知错误'}`);
+      this.log(`Error occurred while getting ZKP proof: ${proofError.message || 'Unknown error'}`);
         
-        // 尝试记录响应内容
+        // Try recording response content
         if (proofError.responseText) {
-        this.log("错误响应内容可用，记录详情");
+        this.log("Error response content available, recording details");
         }
         
-        throw new Error(`获取ZKP证明失败: ${proofError.message}`);
+        throw new Error(`Failed to get ZKP proof: ${proofError.message}`);
       }
   }
 
   /**
-   * 处理 JWT 并完成 zkLogin 流程
-   * @param jwt JWT 令牌
-   * @returns 处理结果
+   * Processes JWT and completes zkLogin process
+   * @param {string} jwt - JWT token
+   * @returns {Promise<ZkLoginProcessResult>} Processing result
    */
   static async processJwt(jwt: string): Promise<ZkLoginProcessResult> {
     try {
-      this.log("开始处理JWT...");
+      this.log("Starting to process JWT...");
       
-      // 1. 检查并获取临时密钥对
+      // 1. Checks and gets ephemeral keypair
       const keypair = this.checkAndGetEphemeralKeyPair();
       
-      // 2. 解析JWT
+      // 2. Parses JWT
       const payload = this.parseAndStoreJwt(jwt);
       
-      // 3. 获取用户盐值
+      // 3. Gets user salt value
       const userSalt = await this.getOrFetchUserSalt(jwt);
       
-      // 4. 计算zkLogin地址
-      this.log("开始计算zkLogin地址...");
+      // 4. Calculates zkLogin address
+      this.log("Starting to calculate zkLogin address...");
       const zkLoginAddress = await SuiService.deriveZkLoginAddress(jwt, userSalt);
-      this.log(`zkLogin地址计算成功: ${zkLoginAddress}`);
+      this.log(`zkLogin address calculation successful: ${zkLoginAddress}`);
       
-      // 5. 获取JWT随机性和最大纪元
+      // 5. Gets JWT randomness and maximum epoch
       const { jwtRandomness, maxEpoch } = this.getJwtParams();
       
-      // 6. 获取并存储ZKP
+      // 6. Gets and stores ZKP
       const partialSignature = await this.getAndStoreProof(
         jwt, 
         keypair, 
@@ -342,22 +368,22 @@ export class ZkLoginService {
         maxEpoch
       );
       
-      // 7. 保存地址和标记处理状态
+      // 7. Saves address and marks processing status
       AppStorage.setZkLoginAddress(zkLoginAddress);
       AppStorage.setJwtProcessed(true);
       
-      // 8. 激活地址
+      // 8. Activates address
       await this.activateAddress(zkLoginAddress);
       
-      this.log("JWT处理完成，返回结果");
+      this.log("JWT processing completed, returning result");
       return {
         zkLoginAddress,
         partialSignature,
         ephemeralKeypair: keypair
       };
     } catch (error: any) {
-      this.log(`处理JWT失败: ${error.message || '未知错误'}`);
-      throw new Error(`JWT处理失败: ${error.message}`);
+      this.log(`Processing JWT failed: ${error.message || 'Unknown error'}`);
+      throw new Error(`JWT processing failed: ${error.message}`);
     }
   }
 } 

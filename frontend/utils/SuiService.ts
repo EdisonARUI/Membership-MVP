@@ -1,3 +1,7 @@
+/**
+ * Service for SUI blockchain operations
+ * Provides utilities for zkLogin operations, keypair management, and address activation
+ */
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { SuiClient } from '@mysten/sui/client';
 import { generateNonce, generateRandomness, jwtToAddress, getExtendedEphemeralPublicKey } from '@mysten/sui/zklogin';
@@ -7,45 +11,55 @@ import { API_ENDPOINTS } from '../app/api/endpoints';
 import { api } from '../app/api/clients';
 import { AppError } from '../interfaces/Error';
 import { SUI_RPC_URL } from '@/config/client';
-// Sui Devnet客户端
+// SUI Devnet client
 const FULLNODE_URL = SUI_RPC_URL;
 export const suiClient = new SuiClient({ url: FULLNODE_URL });
 
-// 最大Epoch增量
+// Maximum Epoch increment
 const MAX_EPOCH_INCREMENT = 2;
 
+/**
+ * Service for SUI blockchain operations
+ * Provides utilities for zkLogin operations and SUI interactions
+ */
 export const SuiService = {
-  // 创建临时密钥对
+  /**
+   * Creates an ephemeral keypair for zkLogin operations
+   * Generates keypair, randomness, and nonce for the current epoch
+   * 
+   * @returns {Promise<EphemeralKeyPair>} The created ephemeral keypair details
+   * @throws {Error} If keypair creation fails or epoch information is unavailable
+   */
   async createEphemeralKeyPair(): Promise<EphemeralKeyPair> {
     try {
-      // 获取当前Epoch
+      // Get current Epoch
       const epochState = await suiClient.getLatestSuiSystemState().catch(error => {
-        console.error('获取Sui系统状态失败:', error);
-        throw new Error(`获取当前Epoch失败: ${error.message || '网络错误'}`);
+        console.error('Failed to get SUI system state:', error);
+        throw new Error(`Failed to get current Epoch: ${error.message || 'Network error'}`);
       });
       
       if (!epochState || !epochState.epoch) {
-        console.error('获取Sui系统状态返回无效:', epochState);
-        throw new Error('无法获取有效的Epoch信息');
+        console.error('SUI system state returned invalid:', epochState);
+        throw new Error('Unable to get valid Epoch information');
       }
       
       const currentEpoch = Number(epochState.epoch);
-      console.log('当前Epoch:', currentEpoch);
+      console.log('Current Epoch:', currentEpoch);
       const maxEpoch = currentEpoch + MAX_EPOCH_INCREMENT;
       
       try {
-        // 创建密钥对和随机数
+        // Create keypair and randomness
         const keypair = new Ed25519Keypair();
         const randomness = generateRandomness();
         const nonce = generateNonce(keypair.getPublicKey(), maxEpoch, randomness);
         
-        // 验证生成的密钥对
+        // Verify generated keypair
         try {
           const address = keypair.getPublicKey().toSuiAddress();
-          console.log('生成的密钥对临时地址:', address);
+          console.log('Generated keypair temporary address:', address);
         } catch (verifyError) {
-          console.warn('验证密钥对时出现警告:', verifyError);
-          // 继续执行，不中断流程
+          console.warn('Warning during keypair verification:', verifyError);
+          // Continue execution, don't interrupt flow
         }
         
         return {
@@ -58,69 +72,97 @@ export const SuiService = {
           nonce
         };
       } catch (keypairError: any) {
-        console.error('创建密钥对时出错:', keypairError);
-        throw new Error(`生成密钥对失败: ${keypairError.message || '未知错误'}`);
+        console.error('Error creating keypair:', keypairError);
+        throw new Error(`Failed to generate keypair: ${keypairError.message || 'Unknown error'}`);
       }
     } catch (error: any) {
-      console.error('createEphemeralKeyPair完整错误:', error);
-      throw error; // 保留原始错误
+      console.error('createEphemeralKeyPair complete error:', error);
+      throw error; // Preserve original error
     }
   },
 
-  // 获取扩展公钥
+  /**
+   * Gets extended public key from a keypair
+   * 
+   * @param {Ed25519Keypair} keypair - The keypair to get extended public key from
+   * @returns {string} The extended public key
+   */
   getExtendedPublicKey(keypair: Ed25519Keypair): string {
     return getExtendedEphemeralPublicKey(keypair.getPublicKey());
   },
 
-  // 获取扩展公钥（从存储的keypair对象）
+  /**
+   * Gets extended public key from stored keypair object
+   * 
+   * @param {any} storedKeypair - The stored keypair object
+   * @returns {string} The extended public key
+   * @throws {Error} If keypair format is invalid
+   */
   getExtendedPublicKeyFromStored(storedKeypair: any): string {
     try {
-      // 如果传入的是完整Ed25519Keypair实例
+      // If input is complete Ed25519Keypair instance
       if (typeof storedKeypair.getPublicKey === 'function') {
         return getExtendedEphemeralPublicKey(storedKeypair.getPublicKey());
       }
       
-      // 如果传入的是存储格式的keypair对象
+      // If input is stored format of keypair object
       if (storedKeypair.publicKey) {
         return getExtendedEphemeralPublicKey(storedKeypair.publicKey);
       }
       
-      throw new Error('无效的密钥对格式');
+      throw new Error('Invalid keypair format');
     } catch (error) {
-      console.error('获取扩展公钥错误:', error);
+      console.error('Error getting extended public key:', error);
       throw error;
     }
   },
 
-  // 从存储的密钥对重新创建实际的Ed25519Keypair实例
+  /**
+   * Recreates an Ed25519Keypair instance from stored keypair data
+   * 
+   * @param {any} storedKeypair - The stored keypair data
+   * @returns {Ed25519Keypair} The recreated keypair instance
+   * @throws {Error} If keypair recreation fails
+   */
   recreateKeypairFromStored(storedKeypair: any): Ed25519Keypair {
-    console.log("开始重建密钥对，传入的storedKeypair:", {
+    console.log("Starting to rebuild keypair, provided storedKeypair:", {
       ...storedKeypair,
-      secretKey: storedKeypair.secretKey ? '*** 隐藏 ***' : '未提供'
+      secretKey: storedKeypair.secretKey ? '*** Hidden ***' : 'Not provided'
     });
     
     if (!storedKeypair.secretKey) {
-      throw new Error('无效的密钥对格式：缺少secretKey字段');
+      throw new Error('Invalid keypair format: missing secretKey field');
     }
     
     try {
-      // 参考zklogin.tsx中的实现，直接从secretKey重建密钥对
-      // 这种方法更简洁，因为Ed25519密钥对的公钥可以从私钥派生
+      // Reference implementation in zklogin.tsx, directly rebuild keypair from secretKey
+      // This method is more concise as Ed25519 public key can be derived from private key
       const keypair = Ed25519Keypair.fromSecretKey(storedKeypair.secretKey);
-      console.log("密钥对重建成功，地址:", keypair.getPublicKey().toSuiAddress());
+      console.log("Keypair rebuilt successfully, address:", keypair.getPublicKey().toSuiAddress());
       return keypair;
     } catch (error: any) {
-      console.error('重新创建密钥对失败:', error);
-      throw new Error(`重新创建密钥对失败: ${error.message}`);
+      console.error('Failed to recreate keypair:', error);
+      throw new Error(`Failed to recreate keypair: ${error.message}`);
     }
   },
 
-  // 从JWT计算zkLogin地址
+  /**
+   * Derives zkLogin address from JWT and user salt
+   * 
+   * @param {string} jwt - The JWT token
+   * @param {string} userSalt - The user's salt value
+   * @returns {string} The derived zkLogin address
+   */
   deriveZkLoginAddress(jwt: string, userSalt: string): string {
     return jwtToAddress(jwt, userSalt);
   },
 
-  // 激活zkLogin地址
+  /**
+   * Activates a zkLogin address by requesting tokens from faucet
+   * 
+   * @param {string} address - The address to activate
+   * @returns {Promise<boolean>} True if activation was successful, false otherwise
+   */
   async activateAddress(address: string): Promise<boolean> {
     try {
       const response = await api.post(
@@ -129,34 +171,43 @@ export const SuiService = {
       );
       
       if (!response.success) {
-        console.error('激活地址失败:', response.error);
+        console.error('Address activation failed:', response.error);
         return false;
       }
       
       return true;
     } catch (error) {
       if (error instanceof AppError) {
-        console.error('激活地址失败:', error.message);
+        console.error('Address activation failed:', error.message);
       } else {
-        console.error('激活地址失败:', error);
+        console.error('Address activation failed:', error);
       }
       return false;
     }
   },
 
-  // 获取当前Epoch
+  /**
+   * Gets the current epoch from SUI system state
+   * 
+   * @returns {Promise<number>} The current epoch number
+   */
   async getCurrentEpoch(): Promise<number> {
     const { epoch } = await suiClient.getLatestSuiSystemState();
     return Number(epoch);
   },
 
-  // 验证地址是否已激活
+  /**
+   * Checks if an address is active by looking for owned objects
+   * 
+   * @param {string} address - The address to check
+   * @returns {Promise<boolean>} True if address is active, false otherwise
+   */
   async isAddressActive(address: string): Promise<boolean> {
     try {
       const objects = await suiClient.getOwnedObjects({ owner: address });
       return objects.data.length > 0;
     } catch (error) {
-      console.error('检查地址状态失败:', error);
+      console.error('Failed to check address status:', error);
       return false;
     }
   }

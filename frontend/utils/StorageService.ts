@@ -1,9 +1,16 @@
+/**
+ * Storage Service
+ * Provides a unified interface for storing and retrieving data in localStorage and sessionStorage
+ */
 import { EphemeralKeyPair, ZkLoginSignature } from "@/components/zklogin/types";
 import { PartialZkLoginSignature } from "@/interfaces/ZkLogin";
 
-// 存储键常量定义
+/**
+ * Storage key constants
+ * Defines all the keys used for storing data in localStorage and sessionStorage
+ */
 const StorageKeys = {
-  // zkLogin技术相关（持久存储）
+  // zkLogin related (persistent storage)
   EPHEMERAL_KEYPAIR: 'zkLogin_ephemeral',
   ZKLOGIN_ADDRESS: 'zkLogin_address',
   USER_SALT: 'zkLogin_userSalt',
@@ -12,12 +19,12 @@ const StorageKeys = {
   ZKLOGIN_SIGNATURE: 'zkLogin_signature',
   DECODED_JWT: 'decodedJwt',
   
-  // 认证相关（持久存储）
+  // Authentication related (persistent storage)
   AUTH_STATUS: 'auth_status',
   AUTH_TX_HASH: 'auth_tx_hash',
   WALLET_SAVED: 'wallet_saved',
   
-  // 会话相关（易失性存储）
+  // Session related (volatile storage)
   JWT_PROCESSED: 'jwt_already_processed',
   HAS_CHECKED_JWT: 'has_checked_jwt',
   PENDING_JWT: 'pending_jwt',
@@ -27,274 +34,314 @@ const StorageKeys = {
   ZKLOGIN_ORIGINAL_MAX_EPOCH: 'zklogin_original_maxEpoch',
   ZKLOGIN_ORIGINAL_RANDOMNESS: 'zklogin_original_randomness',
   
-  // 日志相关
+  // Logging related
   APP_LOGS: 'app_logs'
 };
 
-// 存储工具类 - 统一管理所有存储操作
+/**
+ * Storage utility class
+ * Manages all storage operations in a centralized way
+ */
 export class AppStorage {
-  // zkLogin技术实现相关存储 ======================
+  // zkLogin implementation related storage ======================
   
   /**
-   * 获取临时密钥对
+   * Get ephemeral keypair from storage
+   * @returns The stored ephemeral keypair or null if not found
    */
   static getEphemeralKeypair(): any {
     return this.getFromLocalStorage(StorageKeys.EPHEMERAL_KEYPAIR);
   }
 
   /**
-   * 设置临时密钥对
+   * Store ephemeral keypair
+   * @param keypair The ephemeral keypair to store
    */
   static setEphemeralKeypair(keypair: any): void {
     this.setToLocalStorage(StorageKeys.EPHEMERAL_KEYPAIR, keypair);
   }
 
   /**
-   * 获取zkLogin地址
+   * Get zkLogin address from storage
+   * @returns The stored zkLogin address or null if not found
    */
   static getZkLoginAddress(): string | null {
     return this.getStringFromLocalStorage(StorageKeys.ZKLOGIN_ADDRESS);
   }
 
   /**
-   * 设置zkLogin地址
+   * Store zkLogin address
+   * @param address The zkLogin address to store
    */
   static setZkLoginAddress(address: string): void {
     this.setToLocalStorage(StorageKeys.ZKLOGIN_ADDRESS, address, false);
   }
 
   /**
-   * 获取用户盐值
+   * Get user salt from storage
+   * @returns The stored user salt or null if not found
    */
   static getZkLoginUserSalt(): string | null {
     return this.getStringFromLocalStorage(StorageKeys.USER_SALT);
   }
   
   /**
-   * 设置用户盐值
+   * Store user salt
+   * @param salt The user salt to store
    */
   static setZkLoginUserSalt(salt: string): void {
     this.setToLocalStorage(StorageKeys.USER_SALT, salt, false);
   }
   
   /**
-   * 获取zkLogin证明
+   * Get zkLogin proof from storage
+   * @returns The stored zkLogin proof or null if not found
    */
   static getZkLoginProof(): any | null {
     return this.getFromLocalStorage(StorageKeys.ZKLOGIN_PROOF);
   }
 
   /**
-   * 设置zkLogin证明
+   * Store zkLogin proof
+   * @param proof The zkLogin proof to store
    */
   static setZkLoginProof(proof: any): void {
     this.setToLocalStorage(StorageKeys.ZKLOGIN_PROOF, proof);
   }
 
   /**
-   * 获取解析后的JWT
+   * Get decoded JWT from storage
+   * @returns The stored decoded JWT or null if not found
    */
   static getDecodedJwt(): any | null {
     return this.getFromLocalStorage(StorageKeys.DECODED_JWT);
   }
 
   /**
-   * 设置解析后的JWT
+   * Store decoded JWT
+   * @param decodedJwt The decoded JWT to store
    */
   static setDecodedJwt(decodedJwt: any): void {
     this.setToLocalStorage(StorageKeys.DECODED_JWT, decodedJwt);
   }
 
   /**
-   * 获取zkLogin签名
+   * Get zkLogin signature from storage
+   * @returns The stored zkLogin signature or null if not found
    */
   static getZkLoginSignature(): any | null {
     return this.getFromLocalStorage(StorageKeys.ZKLOGIN_SIGNATURE);
   }
 
   /**
-   * 设置zkLogin签名
+   * Store zkLogin signature
+   * @param signature The zkLogin signature to store
    */
   static setZkLoginSignature(signature: any): void {
     this.setToLocalStorage(StorageKeys.ZKLOGIN_SIGNATURE, signature);
   }
 
   /**
-   * 获取部分zkLogin签名
+   * Get partial zkLogin signature from storage
+   * @returns The stored partial zkLogin signature or null if not found
    */
   static getZkLoginPartialSignature(): any | null {
     return this.getFromLocalStorage(StorageKeys.PARTIAL_SIGNATURE);
   }
 
   /**
-   * 设置部分zkLogin签名
+   * Store partial zkLogin signature
+   * @param signature The partial zkLogin signature to store
    */
   static setZkLoginPartialSignature(signature: any): void {
     this.setToLocalStorage(StorageKeys.PARTIAL_SIGNATURE, signature);
   }
 
-  // 认证状态相关存储 ======================
+  // Authentication state related storage ======================
   
   /**
-   * 获取认证状态
+   * Get authentication status from storage
+   * @returns The stored authentication status or null if not found
    */
   static getAuthStatus(): any | null {
     return this.getFromLocalStorage(StorageKeys.AUTH_STATUS);
   }
 
   /**
-   * 设置认证状态
+   * Store authentication status
+   * @param status The authentication status to store
    */
   static setAuthStatus(status: any): void {
     this.setToLocalStorage(StorageKeys.AUTH_STATUS, status);
   }
 
   /**
-   * 获取认证交易哈希
+   * Get authentication transaction hash from storage
+   * @returns The stored authentication transaction hash or null if not found
    */
   static getAuthTxHash(): string | null {
     return this.getStringFromLocalStorage(StorageKeys.AUTH_TX_HASH);
   }
 
   /**
-   * 设置认证交易哈希
+   * Store authentication transaction hash
+   * @param txHash The authentication transaction hash to store
    */
   static setAuthTxHash(txHash: string): void {
     this.setToLocalStorage(StorageKeys.AUTH_TX_HASH, txHash, false);
   }
 
   /**
-   * 获取钱包是否已保存
+   * Check if wallet is saved
+   * @returns True if wallet is saved, false otherwise
    */
   static getWalletSaved(): boolean {
     return this.getStringFromLocalStorage(StorageKeys.WALLET_SAVED) === 'true';
   }
 
   /**
-   * 设置钱包是否已保存
+   * Set wallet saved status
+   * @param saved True if wallet is saved, false otherwise
    */
   static setWalletSaved(saved: boolean): void {
     this.setToLocalStorage(StorageKeys.WALLET_SAVED, saved.toString(), false);
   }
 
-  // 会话相关存储（sessionStorage） ======================
+  // Session related storage (sessionStorage) ======================
   
   /**
-   * 检查JWT是否已处理
+   * Check if JWT has been processed
+   * @returns True if JWT has been processed, false otherwise
    */
   static getJwtProcessed(): boolean {
     return this.getFromSessionStorage(StorageKeys.JWT_PROCESSED) === 'true';
   }
 
   /**
-   * 设置JWT是否已处理
+   * Set JWT processed status
+   * @param processed True if JWT has been processed, false otherwise
    */
   static setJwtProcessed(processed: boolean): void {
     this.setToSessionStorage(StorageKeys.JWT_PROCESSED, processed.toString());
   }
 
   /**
-   * 获取是否已检查JWT
+   * Check if JWT has been checked
+   * @returns True if JWT has been checked, false otherwise
    */
   static getHasCheckedJwt(): boolean {
     return this.getFromSessionStorage(StorageKeys.HAS_CHECKED_JWT) === 'true';
   }
 
   /**
-   * 设置是否已检查JWT
+   * Set JWT checked status
+   * @param checked True if JWT has been checked, false otherwise
    */
   static setHasCheckedJwt(checked: boolean): void {
     this.setToSessionStorage(StorageKeys.HAS_CHECKED_JWT, checked.toString());
   }
 
   /**
-   * 获取待处理的JWT
+   * Get pending JWT from storage
+   * @returns The stored pending JWT or null if not found
    */
   static getPendingJwt(): string | null {
     return this.getFromSessionStorage(StorageKeys.PENDING_JWT);
   }
 
   /**
-   * 设置待处理的JWT
+   * Store pending JWT
+   * @param jwt The pending JWT to store
    */
   static setPendingJwt(jwt: string): void {
     this.setToSessionStorage(StorageKeys.PENDING_JWT, jwt);
   }
 
   /**
-   * 获取OAuth状态
+   * Get OAuth state from storage
+   * @returns The stored OAuth state or null if not found
    */
   static getOAuthState(): string | null {
     return this.getFromSessionStorage(StorageKeys.OAUTH_STATE);
   }
 
   /**
-   * 设置OAuth状态
+   * Store OAuth state
+   * @param state The OAuth state to store
    */
   static setOAuthState(state: string): void {
     this.setToSessionStorage(StorageKeys.OAUTH_STATE, state);
   }
 
   /**
-   * 获取登录已初始化标志
+   * Check if login has been initiated
+   * @returns True if login has been initiated, false otherwise
    */
   static getLoginInitiated(): boolean {
     return this.getFromSessionStorage(StorageKeys.LOGIN_INITIATED) === 'true';
   }
 
   /**
-   * 设置登录已初始化标志
+   * Set login initiated status
+   * @param initiated True if login has been initiated, false otherwise
    */
   static setLoginInitiated(initiated: boolean): void {
     this.setToSessionStorage(StorageKeys.LOGIN_INITIATED, initiated.toString());
   }
 
   /**
-   * 保存zkLogin原始nonce
+   * Store original zkLogin nonce
+   * @param nonce The original zkLogin nonce to store
    */
   static setZkLoginOriginalNonce(nonce: string): void {
     this.setToSessionStorage(StorageKeys.ZKLOGIN_ORIGINAL_NONCE, nonce);
   }
 
   /**
-   * 获取zkLogin原始nonce
+   * Get original zkLogin nonce from storage
+   * @returns The stored original zkLogin nonce or null if not found
    */
   static getZkLoginOriginalNonce(): string | null {
     return this.getFromSessionStorage(StorageKeys.ZKLOGIN_ORIGINAL_NONCE);
   }
 
   /**
-   * 保存zkLogin原始maxEpoch
+   * Store original zkLogin max epoch
+   * @param maxEpoch The original zkLogin max epoch to store
    */
   static setZkLoginOriginalMaxEpoch(maxEpoch: string): void {
     this.setToSessionStorage(StorageKeys.ZKLOGIN_ORIGINAL_MAX_EPOCH, maxEpoch);
   }
 
   /**
-   * 获取zkLogin原始maxEpoch
+   * Get original zkLogin max epoch from storage
+   * @returns The stored original zkLogin max epoch or null if not found
    */
   static getZkLoginOriginalMaxEpoch(): string | null {
     return this.getFromSessionStorage(StorageKeys.ZKLOGIN_ORIGINAL_MAX_EPOCH);
   }
 
   /**
-   * 保存zkLogin原始随机性
+   * Store original zkLogin randomness
+   * @param randomness The original zkLogin randomness to store
    */
   static setZkLoginOriginalRandomness(randomness: string): void {
     this.setToSessionStorage(StorageKeys.ZKLOGIN_ORIGINAL_RANDOMNESS, randomness);
   }
 
   /**
-   * 获取zkLogin原始随机性
+   * Get original zkLogin randomness from storage
+   * @returns The stored original zkLogin randomness or null if not found
    */
   static getZkLoginOriginalRandomness(): string | null {
     return this.getFromSessionStorage(StorageKeys.ZKLOGIN_ORIGINAL_RANDOMNESS);
   }
 
-  // 日志相关存储 ======================
+  // Logging related storage ======================
   
   /**
-   * 获取应用日志
+   * Get application logs from storage
+   * @returns The stored application logs or an empty array if not found
    */
   static getLogs(): string[] {
     const logs = this.getFromLocalStorage(StorageKeys.APP_LOGS);
@@ -302,14 +349,16 @@ export class AppStorage {
   }
 
   /**
-   * 设置应用日志
+   * Store application logs
+   * @param logs The application logs to store
    */
   static setLogs(logs: string[]): void {
     this.setToLocalStorage(StorageKeys.APP_LOGS, logs);
   }
 
   /**
-   * 添加单条日志
+   * Add a single log entry
+   * @param log The log entry to add
    */
   static addLog(log: string): void {
     const logs = this.getLogs();
@@ -318,21 +367,21 @@ export class AppStorage {
   }
 
   /**
-   * 清除所有日志
+   * Clear all logs
    */
   static clearLogs(): void {
     this.setLogs([]);
   }
 
-  // 清除存储方法 ======================
+  // Storage clearing methods ======================
   
   /**
-   * 清除所有zkLogin相关存储
+   * Clear all zkLogin related storage
    */
   static clearZkLoginStorage(): void {
     if (typeof window === 'undefined') return;
     
-    // 清除localStorage中的数据
+    // Clear data from localStorage
     localStorage.removeItem(StorageKeys.EPHEMERAL_KEYPAIR);
     localStorage.removeItem(StorageKeys.ZKLOGIN_ADDRESS);
     localStorage.removeItem(StorageKeys.USER_SALT);
@@ -341,11 +390,11 @@ export class AppStorage {
     localStorage.removeItem(StorageKeys.ZKLOGIN_SIGNATURE);
     localStorage.removeItem(StorageKeys.DECODED_JWT);
     
-    console.log("[Storage] 已清除所有zkLogin技术相关存储");
+    console.log("[Storage] All zkLogin related storage cleared");
   }
   
   /**
-   * 清除所有认证相关存储
+   * Clear all authentication related storage
    */
   static clearAuthStorage(): void {
     if (typeof window === 'undefined') return;
@@ -354,11 +403,11 @@ export class AppStorage {
     localStorage.removeItem(StorageKeys.AUTH_TX_HASH);
     localStorage.removeItem(StorageKeys.WALLET_SAVED);
     
-    console.log("[Storage] 已清除所有认证相关存储");
+    console.log("[Storage] All authentication related storage cleared");
   }
   
   /**
-   * 清除所有会话相关存储
+   * Clear all session related storage
    */
   static clearSessionStorage(): void {
     if (typeof window === 'undefined') return;
@@ -372,24 +421,27 @@ export class AppStorage {
     sessionStorage.removeItem(StorageKeys.ZKLOGIN_ORIGINAL_MAX_EPOCH);
     sessionStorage.removeItem(StorageKeys.ZKLOGIN_ORIGINAL_RANDOMNESS);
     
-    console.log("[Storage] 已清除所有会话相关存储");
+    console.log("[Storage] All session related storage cleared");
   }
   
   /**
-   * 清除所有存储
+   * Clear all storage
    */
   static clearAll(): void {
     this.clearZkLoginStorage();
     this.clearAuthStorage();
     this.clearSessionStorage();
     localStorage.removeItem(StorageKeys.APP_LOGS);
-    console.log("[Storage] 已清除所有存储");
+    console.log("[Storage] All storage cleared");
   }
 
-  // 工具方法 ======================
+  // Utility methods ======================
   
   /**
-   * 从localStorage获取对象
+   * Get object from localStorage
+   * @param key The key to get from localStorage
+   * @returns The parsed object from localStorage or null if not found
+   * @private
    */
   private static getFromLocalStorage(key: string): any | null {
     if (typeof window === 'undefined') return null;
@@ -399,13 +451,16 @@ export class AppStorage {
       if (!value) return null;
       return JSON.parse(value);
     } catch (error) {
-      console.error(`[Storage] 从localStorage获取键${key}失败:`, error);
+      console.error(`[Storage] Failed to get key ${key} from localStorage:`, error);
       return null;
     }
   }
   
   /**
-   * 从localStorage获取字符串
+   * Get string from localStorage
+   * @param key The key to get from localStorage
+   * @returns The string from localStorage or null if not found
+   * @private
    */
   private static getStringFromLocalStorage(key: string): string | null {
     if (typeof window === 'undefined') return null;
@@ -413,7 +468,11 @@ export class AppStorage {
   }
 
   /**
-   * 保存到localStorage
+   * Store value in localStorage
+   * @param key The key to store in localStorage
+   * @param value The value to store
+   * @param isObject Whether the value is an object (to be JSON stringified)
+   * @private
    */
   private static setToLocalStorage(key: string, value: any, isObject: boolean = true): void {
     if (typeof window === 'undefined') return;
@@ -425,12 +484,15 @@ export class AppStorage {
         localStorage.setItem(key, value);
       }
     } catch (error) {
-      console.error(`[Storage] 保存到localStorage键${key}失败:`, error);
+      console.error(`[Storage] Failed to save key ${key} to localStorage:`, error);
     }
   }
   
   /**
-   * 从sessionStorage获取值
+   * Get value from sessionStorage
+   * @param key The key to get from sessionStorage
+   * @returns The value from sessionStorage or null if not found
+   * @private
    */
   private static getFromSessionStorage(key: string): string | null {
     if (typeof window === 'undefined') return null;
@@ -438,7 +500,10 @@ export class AppStorage {
   }
 
   /**
-   * 保存到sessionStorage
+   * Store value in sessionStorage
+   * @param key The key to store in sessionStorage
+   * @param value The value to store
+   * @private
    */
   private static setToSessionStorage(key: string, value: string): void {
     if (typeof window === 'undefined') return;
@@ -446,5 +511,7 @@ export class AppStorage {
   }
 }
 
-// 保留原有引用以支持不中断现有代码
+/**
+ * Legacy alias for backward compatibility
+ */
 export const ZkLoginStorage = AppStorage; 

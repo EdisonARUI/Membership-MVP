@@ -1,3 +1,7 @@
+/**
+ * Service for managing lottery operations on the SUI blockchain
+ * Provides functionality for instant draws and retrieving lottery history
+ */
 import { Transaction } from '@mysten/sui/transactions';
 import { SuiClient } from '@mysten/sui/client';
 import { COMMON_CONTRACT, CONTRACT_ADDRESSES } from '../config/contracts';
@@ -9,26 +13,53 @@ import { useZkLoginTransactions } from '@/hooks/useZkLoginTransactions';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { PartialZkLoginSignature } from '@/interfaces/ZkLogin';
 import { SUI_RPC_URL } from '@/config/client';
-// Sui客户端配置
+// Sui client configuration
 const FULLNODE_URL = SUI_RPC_URL;
 
-// 自定义错误类
+/**
+ * Custom error class for lottery-specific errors
+ * Provides additional details for debugging
+ */
 export class LotteryError extends Error {
+  /**
+   * Creates a new LotteryError instance
+   * 
+   * @param {string} message - Error message
+   * @param {any} details - Additional error details
+   */
   constructor(message: string, public details?: any) {
     super(message);
     this.name = 'LotteryError';
   }
 }
 
+/**
+ * Service for managing lottery functionality
+ * Handles instant draws, history retrieval, and statistics
+ */
 export class LotteryService {
   private client: SuiClient;
 
+  /**
+   * Creates a new LotteryService instance
+   * Initializes the SUI client
+   */
   constructor() {
-    // 创建自己的SuiClient实例
+    // Create own SuiClient instance
     this.client = new SuiClient({ url: FULLNODE_URL });
   }
 
-  // 即时抽奖 - 接收所有zkLogin参数
+  /**
+   * Performs an instant lottery draw 
+   * Calls the contract's instant_draw method and processes the result
+   * 
+   * @param {string} zkLoginAddress - User's zkLogin address
+   * @param {Ed25519Keypair} ephemeralKeyPair - Ephemeral keypair for transaction signing
+   * @param {PartialZkLoginSignature} partialSignature - Partial zkLogin signature
+   * @param {string} userSalt - User's salt value
+   * @param {any} decodedJwt - Decoded JWT information
+   * @returns {Promise<DrawResult>} Result of the lottery draw
+   */
   async instantDraw(
     zkLoginAddress: string,
     ephemeralKeyPair: Ed25519Keypair,
@@ -37,34 +68,34 @@ export class LotteryService {
     decodedJwt: any
   ): Promise<DrawResult> {
     try {
-      // 验证参数
+      // Validate parameters
       if (!zkLoginAddress) {
-        throw new LotteryError('未提供zkLogin地址');
+        throw new LotteryError('zkLogin address not provided');
       }
       
       if (!ephemeralKeyPair) {
-        throw new LotteryError('未提供临时密钥对');
+        throw new LotteryError('Ephemeral keypair not provided');
       }
       
       if (!partialSignature) {
-        throw new LotteryError('未提供zkLogin部分签名', { signature: partialSignature });
+        throw new LotteryError('zkLogin partial signature not provided', { signature: partialSignature });
       }
       
       if (!userSalt) {
-        throw new LotteryError('未提供用户盐值');
+        throw new LotteryError('User salt not provided');
       }
       
       if (!decodedJwt) {
-        throw new LotteryError('未提供JWT数据');
+        throw new LotteryError('JWT data not provided');
       }
       
-      // 创建交易
+      // Create transaction
       const txb = new Transaction();
       
-      // 设置发送者
+      // Set sender
       txb.setSender(zkLoginAddress);
       
-      // 添加抽奖调用
+      // Add lottery draw call
       txb.moveCall({
         target: `${CONTRACT_ADDRESSES.LOTTERY.PACKAGE_ID}::${CONTRACT_ADDRESSES.LOTTERY.MODULE_NAME}::instant_draw`,
         arguments: [
@@ -74,10 +105,10 @@ export class LotteryService {
         ]
       });
       
-      // 使用useZkLoginTransactions执行交易
+      // Use useZkLoginTransactions to execute transaction
       const { signAndExecuteTransaction } = useZkLoginTransactions();
       
-      // 执行交易，使用签名并执行方法
+      // Execute transaction using sign and execute method
       const txResult = await signAndExecuteTransaction(
         txb,
         zkLoginAddress,
@@ -87,37 +118,37 @@ export class LotteryService {
         decodedJwt
       );
       
-      // 如果交易哈希存在，则认为交易已提交到链上
+      // If transaction hash exists, consider transaction submitted to the chain
       if (txResult.digest) {
-        console.log("交易已提交，ID:", txResult.digest);
-        console.log("交易详情:", txResult);
+        console.log("Transaction submitted, ID:", txResult.digest);
+        console.log("Transaction details:", txResult);
         
-        // 添加原始txResult调试异常
+        // Add original txResult debug exception
         if (!txResult.events) {
-          throw new Error(`事件为空: txResult.events=${JSON.stringify(txResult.events)}, 类型=${typeof txResult.events}`);
+          throw new Error(`Events are empty: txResult.events=${JSON.stringify(txResult.events)}, type=${typeof txResult.events}`);
         }
         
-        // 检查交易结果中是否包含InstantWin事件
+        // Check if transaction result contains InstantWin event
         const events = txResult.events || [];
         
-        // 添加事件数组调试异常
+        // Add event array debug exception
         if (events.length === 0) {
-          throw new Error(`未检测到任何事件: events=${JSON.stringify(events)}`);
+          throw new Error(`No events detected: events=${JSON.stringify(events)}`);
         }
         
-        // 构建事件匹配结果报告，用于调试
+        // Build event match result report for debugging
         const eventReport = events.map((event, index) => {
           if (!event || !event.type) {
-            return { index, valid: false, message: "事件无效或没有type属性" };
+            return { index, valid: false, message: "Event invalid or missing type attribute" };
           }
           
-          // 检查是否匹配InstantWin
+          // Check if matches InstantWin
           const isInstantWin = event.type.includes('InstantWin');
           
-          // 检查是否匹配PrizeWithdrawn
+          // Check if matches PrizeWithdrawn
           const isPrizeWithdrawn = event.type.includes('PrizeWithdrawn');
           
-          // 检查数据结构
+          // Check data structure
           const hasAmount = event.parsedJson && typeof (event.parsedJson as Record<string, any>).amount !== 'undefined';
           const hasPlayer = event.parsedJson && typeof (event.parsedJson as Record<string, any>).player !== 'undefined';
           
@@ -132,7 +163,7 @@ export class LotteryService {
           };
         });
         
-        // 使用更健壮的检测方法查找抽奖事件
+        // Use more robust detection method to find lottery events
         const instantWinEvent = events.find(event => 
           event && event.type && (
             event.type.includes(`${CONTRACT_ADDRESSES.LOTTERY.PACKAGE_ID}::lottery::InstantWin`) || 
@@ -144,37 +175,37 @@ export class LotteryService {
           event && event.type && event.type.includes('PrizeWithdrawn')
         );
         
-        // 提取中奖金额，优先从InstantWin事件中获取
+        // Extract win amount, prioritize from InstantWin event
         let winAmount = 0;
-        let winSource = "未找到";
+        let winSource = "Not found";
         
         if (instantWinEvent && instantWinEvent.parsedJson) {
           const eventData = instantWinEvent.parsedJson as Record<string, any>;
           winAmount = Number(eventData.amount || 0);
-          winSource = "InstantWin事件";
+          winSource = "InstantWin event";
         } else if (prizeWithdrawnEvent && prizeWithdrawnEvent.parsedJson) {
           const eventData = prizeWithdrawnEvent.parsedJson as Record<string, any>;
           winAmount = Number(eventData.amount || 0);
-          winSource = "PrizeWithdrawn事件";
+          winSource = "PrizeWithdrawn event";
         }
         
-        // // 综合调试异常点 - 提供完整的事件解析信息
-        // throw new Error(`事件解析诊断:
-        //   1. 找到事件总数: ${events.length}
-        //   2. 事件详情: ${JSON.stringify(eventReport)}
-        //   3. 找到InstantWin事件: ${!!instantWinEvent}
-        //   4. 找到PrizeWithdrawn事件: ${!!prizeWithdrawnEvent}
-        //   5. InstantWin事件类型: ${instantWinEvent?.type || '无'}
-        //   6. PrizeWithdrawn事件类型: ${prizeWithdrawnEvent?.type || '无'}
-        //   7. 提取的金额: ${winAmount}
-        //   8. 金额来源: ${winSource}
-        //   9. 原始InstantWin事件: ${JSON.stringify(instantWinEvent)}
-        //   10. 原始PrizeWithdrawn事件: ${JSON.stringify(prizeWithdrawnEvent)}
+        // // Comprehensive debug exception point - provide complete event parsing information
+        // throw new Error(`Event parsing diagnosis:
+        //   1. Found events total: ${events.length}
+        //   2. Event details: ${JSON.stringify(eventReport)}
+        //   3. Found InstantWin event: ${!!instantWinEvent}
+        //   4. Found PrizeWithdrawn event: ${!!prizeWithdrawnEvent}
+        //   5. InstantWin event type: ${instantWinEvent?.type || 'none'}
+        //   6. PrizeWithdrawn event type: ${prizeWithdrawnEvent?.type || 'none'}
+        //   7. Extracted amount: ${winAmount}
+        //   8. Amount source: ${winSource}
+        //   9. Original InstantWin event: ${JSON.stringify(instantWinEvent)}
+        //   10. Original PrizeWithdrawn event: ${JSON.stringify(prizeWithdrawnEvent)}
         // `);
         
-        // 只要有交易ID，我们都视为交易成功
+        // As long as there is a transaction ID, we consider the transaction successful
         try {
-          // 使用API客户端调用抽奖记录API
+          // Use API client to call lottery record API
           const response = await api.post(
             API_ENDPOINTS.LOTTERY.RECORDS,
             {
@@ -185,31 +216,31 @@ export class LotteryService {
           );
 
           if (!response.success) {
-            console.warn("记录抽奖结果失败:", response.error);
-            // 继续执行，不影响用户体验
+            console.warn("Failed to record lottery result:", response.error);
+            // Continue execution, don't affect user experience
           }
         } catch (e) {
-          console.warn("记录抽奖结果失败:", e);
-          // 继续执行，不影响用户体验
+          console.warn("Failed to record lottery result:", e);
+          // Continue execution, don't affect user experience
         }
         
-        // 中奖处理
+        // Prize handling
         if (winAmount > 0) {
-          toast.success(`恭喜！你赢得了 ${winAmount / 1000000000} SUI`);
+          toast.success(`Congratulations! You won ${winAmount / 1000000000} SUI`);
         } else {
-          toast.success('抽奖成功，但未中奖，再接再厉！');
+          toast.success('Draw successful, but no prize. Better luck next time!');
         }
         
-        // 返回DrawResult结构
+        // Return DrawResult structure
         return {
           success: true,
           txId: txResult.digest,
           amount: winAmount
         };
       }
-      // 交易失败情况
+      // Transaction failure cases
       else {
-        // 提取详细错误信息
+        // Extract detailed error information
         const statusError = txResult.effects?.status?.error;
         const errorDetails = {
           txDigest: txResult.digest,
@@ -217,10 +248,10 @@ export class LotteryService {
           events: txResult.events
         };
         
-        throw new LotteryError(`交易执行失败: ${statusError || '执行失败'}`, errorDetails);
+        throw new LotteryError(`Transaction execution failed: ${statusError || 'Execution failed'}`, errorDetails);
       }
     } catch (error: any) {
-      // 统一错误处理
+      // Unified error handling
       if (error instanceof LotteryError) {
         return {
           success: false,
@@ -231,7 +262,7 @@ export class LotteryService {
       
       return {
         success: false,
-        error: `抽奖过程中发生错误: ${error.message || '未知异常'}`,
+        error: `Error during lottery process: ${error.message || 'Unknown exception'}`,
         errorDetails: {
           errorType: error.name,
           stack: error.stack
@@ -240,21 +271,29 @@ export class LotteryService {
     }
   }
   
-  // 获取抽奖历史
+  /**
+   * Retrieves lottery history for a specific player or all players
+   * 
+   * @param {string} player - Optional player address to filter history
+   * @param {number} limit - Maximum number of records to retrieve (default: 10)
+   * @param {boolean} winnersOnly - Whether to only return winning draws (default: false)
+   * @returns {Promise<LotteryHistoryResponse>} List of lottery history records
+   * @throws {LotteryError} If API request fails
+   */
   async getLotteryHistory(player?: string, limit: number = 10, winnersOnly: boolean = false): Promise<LotteryHistoryResponse> {
     try {
-      // 构建查询参数
+      // Build query parameters
       let queryParams = new URLSearchParams();
       if (player) queryParams.append('player', player);
       if (limit) queryParams.append('limit', limit.toString());
       if (winnersOnly) queryParams.append('winners_only', 'true');
       
-      // 使用API客户端调用历史记录API
+      // Use API client to call history record API
       const url = `${API_ENDPOINTS.LOTTERY.HISTORY}?${queryParams.toString()}`;
       const response = await api.get<LotteryHistoryResponse>(url);
       
       if (!response.success) {
-        throw new LotteryError(`获取抽奖历史失败: ${response.error?.message || '接口错误'}`, {
+        throw new LotteryError(`Failed to retrieve lottery history: ${response.error?.message || 'API error'}`, {
           url,
           errorResponse: response.error
         });
@@ -263,38 +302,45 @@ export class LotteryService {
       return response.data as LotteryHistoryResponse;
     } catch (error: any) {
       if (error instanceof LotteryError) {
-        throw error; // 直接抛出自定义错误
+        throw error; // Directly throw custom errors
       }
       
-      // 网络或其他错误
+      // Network or other errors
       if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-        throw new LotteryError('API服务不可用，请检查网络连接', {
+        throw new LotteryError('API service unavailable, please check network connection', {
           originalError: error,
           endpoint: API_ENDPOINTS.LOTTERY.HISTORY
         });
       }
       
-      throw new LotteryError(`获取抽奖历史失败: ${error.message || '未知异常'}`, {
+      throw new LotteryError(`Failed to retrieve lottery history: ${error.message || 'Unknown exception'}`, {
         errorType: error.name,
         stack: error.stack
       });
     }
   }
 
-  // 获取抽奖统计数据
+  /**
+   * Retrieves lottery statistics for a player or all players
+   * 
+   * @param {string} player - Optional player address to filter statistics
+   * @param {string} period - Time period for statistics (default: 'all')
+   * @returns {Promise<LotteryStats>} Lottery statistics data
+   * @throws {LotteryError} If API request fails
+   */
   async getLotteryStats(player?: string, period: string = 'all'): Promise<LotteryStats> {
     try {
-      // 构建查询参数
+      // Build query parameters
       let queryParams = new URLSearchParams();
       if (player) queryParams.append('player', player);
       if (period) queryParams.append('period', period);
       
-      // 使用API客户端调用统计API
+      // Use API client to call statistics API
       const url = `${API_ENDPOINTS.LOTTERY.STATS}?${queryParams.toString()}`;
       const response = await api.get<LotteryStats>(url);
       
       if (!response.success) {
-        throw new LotteryError(`获取抽奖统计失败: ${response.error?.message || '接口错误'}`, {
+        throw new LotteryError(`Failed to retrieve lottery statistics: ${response.error?.message || 'API error'}`, {
           url,
           errorResponse: response.error,
           parameters: { player, period }
@@ -304,19 +350,19 @@ export class LotteryService {
       return response.data as LotteryStats;
     } catch (error: any) {
       if (error instanceof LotteryError) {
-        throw error; // 直接抛出自定义错误
+        throw error; // Directly throw custom errors
       }
       
-      // 网络或其他错误
+      // Network or other errors
       if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-        throw new LotteryError('API服务不可用，请检查网络连接或API端点配置', {
+        throw new LotteryError('API service unavailable, please check network connection or API endpoint configuration', {
           originalError: error,
           endpoint: API_ENDPOINTS.LOTTERY.STATS,
           parameters: { player, period }
         });
       }
       
-      throw new LotteryError(`获取抽奖统计失败: ${error.message || '未知异常'}`, {
+      throw new LotteryError(`Failed to retrieve lottery statistics: ${error.message || 'Unknown exception'}`, {
         errorType: error.name,
         stack: error.stack,
         parameters: { player, period }

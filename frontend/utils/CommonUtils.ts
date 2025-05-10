@@ -1,3 +1,7 @@
+/**
+ * Common utility functions for application-wide use
+ * This file contains general helper functions that can be used across the application
+ */
 import { redirect } from "next/navigation";
 
 /**

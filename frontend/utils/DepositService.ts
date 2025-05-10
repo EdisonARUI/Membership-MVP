@@ -1,3 +1,7 @@
+/**
+ * Service for managing USDT deposit operations on SUI blockchain
+ * Provides methods for minting test USDT tokens and retrieving deposit records
+ */
 import { Transaction } from '@mysten/sui/transactions';
 import { SuiClient } from '@mysten/sui/client';
 import { DepositRequest, DepositResponse, DepositRecordsResponse } from '@/interfaces/Deposit';
@@ -11,14 +15,32 @@ import { useZkLoginTransactions } from '@/hooks/useZkLoginTransactions';
 
 const FULLNODE_URL = SUI_RPC_URL;
 
+/**
+ * Service for managing USDT deposits on the SUI blockchain
+ * Handles minting test tokens and tracking deposit records
+ */
 export class DepositService {
   private client: SuiClient;
 
+  /**
+   * Creates a new instance of DepositService
+   * Initializes SUI client connection
+   */
   constructor() {
     this.client = new SuiClient({ url: FULLNODE_URL });
   }
 
-  // 使用合约的public_mint方法实现充值
+  /**
+   * Mints test USDT tokens using the contract's public_mint method
+   * 
+   * @param {string} zkLoginAddress - The user's zkLogin address
+   * @param {number} amount - The amount of tokens to mint
+   * @param {Ed25519Keypair} ephemeralKeyPair - Ephemeral keypair for transaction signing
+   * @param {PartialZkLoginSignature} partialSignature - Partial zkLogin signature
+   * @param {string} userSalt - User's salt value
+   * @param {any} decodedJwt - Decoded JWT information
+   * @returns {Promise<DepositResponse>} Result of the minting operation
+   */
   async mintUSDT(
     zkLoginAddress: string,
     amount: number,
@@ -28,11 +50,11 @@ export class DepositService {
     decodedJwt: any
   ): Promise<DepositResponse> {
     try {
-      // 创建交易
+      // Create transaction
       const txb = new Transaction();
       txb.setSender(zkLoginAddress);
       
-      // 调用public_mint方法
+      // Call public_mint method
       txb.moveCall({
         target: `${CONTRACT_ADDRESSES.COIN.PACKAGE_ID}::test_usdt::public_mint`,
         arguments: [
@@ -41,7 +63,7 @@ export class DepositService {
         ]
       });
       
-      // 执行交易
+      // Execute transaction
       const { signAndExecuteTransaction } = useZkLoginTransactions();
       const txResult = await signAndExecuteTransaction(
         txb,
@@ -53,7 +75,7 @@ export class DepositService {
       );
       
       if (txResult.digest) {
-        // 记录充值
+        // Record deposit
         try {
           await api.post(
             API_ENDPOINTS.DEPOSIT.RECORDS,
@@ -64,7 +86,7 @@ export class DepositService {
             }
           );
         } catch (e) {
-          console.warn("记录充值结果失败:", e);
+          console.warn("Failed to record deposit result:", e);
         }
         
         return {
@@ -75,20 +97,27 @@ export class DepositService {
       } else {
         return {
           success: false,
-          error: "交易执行失败",
+          error: "Transaction execution failed",
           errorDetails: txResult.effects?.status?.error
         };
       }
     } catch (error: any) {
       return {
         success: false,
-        error: `充值过程中发生错误: ${error.message || '未知异常'}`,
+        error: `Error during deposit process: ${error.message || 'Unknown exception'}`,
         errorDetails: error
       };
     }
   }
   
-  // 获取充值记录
+  /**
+   * Retrieves deposit records for a specific user
+   * 
+   * @param {string} userAddress - Address of the user to get records for
+   * @param {number} limit - Maximum number of records to retrieve (default: 10)
+   * @returns {Promise<DepositRecordsResponse>} List of deposit records
+   * @throws {Error} If the API request fails
+   */
   async getDepositRecords(userAddress: string, limit: number = 10): Promise<DepositRecordsResponse> {
     try {
       const queryParams = new URLSearchParams();
@@ -100,7 +129,7 @@ export class DepositService {
       
       return response.data as DepositRecordsResponse;
     } catch (error: any) {
-      throw new Error(`获取充值记录失败: ${error.message || '未知异常'}`);
+      throw new Error(`Failed to get deposit records: ${error.message || 'Unknown exception'}`);
     }
   }
 }

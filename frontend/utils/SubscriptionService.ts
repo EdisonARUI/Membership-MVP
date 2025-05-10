@@ -1,3 +1,7 @@
+/**
+ * Service for managing subscription operations on the SUI blockchain
+ * Provides methods for creating, renewing, and managing subscription plans
+ */
 import { Transaction } from '@mysten/sui/transactions';
 import { SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
@@ -28,16 +32,31 @@ import { TOKENS, toTokenAmount, fromTokenAmount } from '@/config/tokens';
 
 const FULLNODE_URL = 'https://fullnode.devnet.sui.io';
 
+/**
+ * Service for managing subscription functionality
+ * Provides methods for creating, renewing, canceling and managing subscriptions
+ */
 export class SubscriptionService {
   private client: SuiClient;
   private zkLoginTransactions: ReturnType<typeof useZkLoginTransactions>;
 
+  /**
+   * Creates a new instance of SubscriptionService
+   * Initializes SUI client and zkLogin transaction utilities
+   */
   constructor() {
     this.client = new SuiClient({ url: FULLNODE_URL });
     this.zkLoginTransactions = useZkLoginTransactions();
   }
 
-  // 辅助方法: 获取订阅计划详情
+  /**
+   * Retrieves subscription plan details
+   * 
+   * @param {string} planId - ID of the subscription plan to retrieve
+   * @returns {Promise<SubscriptionPlan>} The subscription plan details
+   * @throws {Error} If plan retrieval fails or plan data is invalid
+   * @private
+   */
   private async getSubscriptionPlan(planId: string): Promise<SubscriptionPlan> {
     const queryParams = new URLSearchParams();
     queryParams.append('plan_id', planId);
@@ -45,69 +64,98 @@ export class SubscriptionService {
     const planResponse = await api.get<PlanResponse>(url);
     
     if (!planResponse.success || !planResponse.data?.plan) {
-      throw new Error(`获取计划详情失败: ${planResponse.error?.message || '未知错误'}, 请求参数: plan_id=${planId}`);
+      throw new Error(`Failed to retrieve plan details: ${planResponse.error?.message || 'Unknown error'}, Request parameters: plan_id=${planId}`);
     }
     
     const plan = planResponse.data.plan;
     
-    // 验证计划信息完整性
+    // Validate plan information completeness
     if (!plan.id || !plan.name || !plan.period || typeof plan.price !== 'number') {
-      throw new Error(`计划信息不完整或格式错误: ${JSON.stringify(plan)}`);
+      throw new Error(`Plan information incomplete or invalid format: ${JSON.stringify(plan)}`);
     }
     
     return plan;
   }
   
-  // 辅助方法: 计算订阅时长（毫秒）
+  /**
+   * Calculates subscription duration in milliseconds based on period
+   * 
+   * @param {string} period - Subscription period ('monthly', 'quarterly', 'yearly')
+   * @returns {number} Duration in milliseconds
+   * @throws {Error} If period is unknown
+   * @private
+   */
   private calculateDuration(period: string): number {
     switch (period) {
       case 'monthly':
-        return 30 * 24 * 60 * 60 * 1000; // 30天
+        return 30 * 24 * 60 * 60 * 1000; // 30 days
       case 'quarterly':
-        return 90 * 24 * 60 * 60 * 1000; // 90天
+        return 90 * 24 * 60 * 60 * 1000; // 90 days
       case 'yearly':
-        return 365 * 24 * 60 * 60 * 1000; // 365天
+        return 365 * 24 * 60 * 60 * 1000; // 365 days
       default:
-        throw new Error(`未知的订阅周期: ${period}`);
+        throw new Error(`Unknown subscription period: ${period}`);
     }
   }
   
-  // 辅助方法: 准备支付代币
+  /**
+   * Prepares payment coin for subscription transaction
+   * Finds and splits user's tokens for payment
+   * 
+   * @param {Transaction} txb - Transaction block to add payment to
+   * @param {string} zkLoginAddress - User's zkLogin address
+   * @param {bigint} paymentAmount - Payment amount in token units
+   * @returns {Promise<any>} The payment coin object
+   * @throws {Error} If user has insufficient funds
+   * @private
+   */
   private async preparePaymentCoin(
     txb: Transaction, 
     zkLoginAddress: string, 
     paymentAmount: bigint
   ): Promise<any> {
-    // 获取用户的TEST_USDT代币对象
+    // Get user's TEST_USDT token objects
     const coinData = await this.client.getCoins({
       owner: zkLoginAddress,
       coinType: TOKENS.TEST_USDT.coinType || ''
     });
     
     if (!coinData || !coinData.data || coinData.data.length === 0) {
-      throw new Error(`未找到${TOKENS.TEST_USDT.symbol}代币`);
+      throw new Error(`${TOKENS.TEST_USDT.symbol} token not found`);
     }
     
     const coinObjects = coinData.data;
     
-    // 余额显示时使用精度转换函数
+    // Use precision conversion function for balance display
     const totalBalance = coinObjects.reduce((sum, coin) => sum + BigInt(coin.balance), BigInt(0));
     if (totalBalance < paymentAmount) {
-      throw new Error(`余额不足，需要 ${fromTokenAmount(paymentAmount, TOKENS.TEST_USDT)} ${TOKENS.TEST_USDT.symbol}，现有 ${fromTokenAmount(totalBalance, TOKENS.TEST_USDT)} ${TOKENS.TEST_USDT.symbol}`);
+      throw new Error(`Insufficient balance, need ${fromTokenAmount(paymentAmount, TOKENS.TEST_USDT)} ${TOKENS.TEST_USDT.symbol}, available ${fromTokenAmount(totalBalance, TOKENS.TEST_USDT)} ${TOKENS.TEST_USDT.symbol}`);
     }
     
-    // 选择一个足够大的代币对象拆分
+    // Select a token object large enough to split
     const coinToSplit = coinObjects.find(coin => BigInt(coin.balance) >= paymentAmount);
     if (!coinToSplit || !coinToSplit.coinObjectId) {
-      throw new Error(`没有找到足够大的代币对象，需要 ${fromTokenAmount(paymentAmount, TOKENS.TEST_USDT)} ${TOKENS.TEST_USDT.symbol}`);
+      throw new Error(`No token object large enough found, need ${fromTokenAmount(paymentAmount, TOKENS.TEST_USDT)} ${TOKENS.TEST_USDT.symbol}`);
     }
 
-    // 正确使用splitCoins - 返回的是分割出的新币数组
+    // Correctly use splitCoins - returns an array of new split coins
     const [paymentCoin] = txb.splitCoins(txb.object(coinToSplit.coinObjectId), [paymentAmount]);
     return paymentCoin;
   }
   
-  // 辅助方法: 执行zkLogin交易
+  /**
+   * Executes a zkLogin transaction
+   * Signs and submits transaction to the blockchain
+   * 
+   * @param {Transaction} txb - Transaction to execute
+   * @param {string} zkLoginAddress - User's zkLogin address
+   * @param {Ed25519Keypair} ephemeralKeyPair - Ephemeral keypair for signing
+   * @param {PartialZkLoginSignature} partialSignature - Partial zkLogin signature
+   * @param {string} userSalt - User's salt value
+   * @param {any} decodedJwt - Decoded JWT information
+   * @returns {Promise<any>} Transaction execution result
+   * @private
+   */
   private async executeZkLoginTransaction(
     txb: Transaction,
     zkLoginAddress: string,
@@ -126,7 +174,14 @@ export class SubscriptionService {
     );
   }
   
-  // 辅助方法: 从事件中提取对象ID
+  /**
+   * Extracts object ID from transaction events
+   * 
+   * @param {any[] | null | undefined} events - Transaction events to search
+   * @param {string} eventType - Type of event to look for
+   * @returns {string | null} Object ID if found, null otherwise
+   * @private
+   */
   private extractObjectIdFromEvents(events: any[] | null | undefined, eventType: string): string | null {
     if (!events || events.length === 0) return null;
     
@@ -141,7 +196,18 @@ export class SubscriptionService {
     return null;
   }
 
-  // 创建订阅
+  /**
+   * Creates a new subscription
+   * Processes payment and calls the subscription contract
+   * 
+   * @param {CreateSubscriptionRequest} request - Subscription creation parameters
+   * @param {string} zkLoginAddress - User's zkLogin address
+   * @param {Ed25519Keypair} ephemeralKeyPair - Ephemeral keypair for signing
+   * @param {PartialZkLoginSignature} partialSignature - Partial zkLogin signature
+   * @param {string} userSalt - User's salt value
+   * @param {any} decodedJwt - Decoded JWT information
+   * @returns {Promise<CreateSubscriptionResponse>} Result of subscription creation
+   */
   async createSubscription(
     request: CreateSubscriptionRequest,
     zkLoginAddress: string,
@@ -151,28 +217,28 @@ export class SubscriptionService {
     decodedJwt: any
   ): Promise<CreateSubscriptionResponse> {
     try {
-      // 创建交易
+      // Create transaction
       const txb = new Transaction();
       txb.setSender(zkLoginAddress);
       
-      // 1. 获取订阅计划详情
+      // 1. Get subscription plan details
       const plan = await this.getSubscriptionPlan(request.plan_id);
       
-      // 2. 计算订阅时长（毫秒）
+      // 2. Calculate subscription duration (milliseconds)
       const duration = this.calculateDuration(plan.period);
       
-      // 3. 获取支付金额
+      // 3. Get payment amount
       const paymentAmount = toTokenAmount(plan.price, TOKENS.TEST_USDT);
       
-      // 4. 准备支付代币
+      // 4. Prepare payment token
       const paymentCoin = await this.preparePaymentCoin(txb, zkLoginAddress, BigInt(paymentAmount));
       
       try {
-        // 5. 调用create_subscription方法
+        // 5. Call create_subscription method
         txb.moveCall({
           target: `${CONTRACT_ADDRESSES.SUBSCRIPTION.PACKAGE_ID}::subscription::create_subscription`,
           arguments: [
-            paymentCoin, // 拆分后的代币作为支付
+            paymentCoin, // Split token as payment
             txb.pure.u64(duration),
             txb.pure.bool(request.auto_renew),
             txb.object(COMMON_CONTRACT.CLOCK),
@@ -182,17 +248,17 @@ export class SubscriptionService {
         });
       } catch (moveCallError: any) {
         const args = {
-          splitCoin: paymentCoin ? '已定义' : '未定义',
+          splitCoin: paymentCoin ? 'defined' : 'undefined',
           duration, 
           auto_renew: request.auto_renew,
           clock: COMMON_CONTRACT.CLOCK,
           auth_registry: CONTRACT_ADDRESSES.AUTHENTICATION.REGISTRY_OBJECT_ID,
           fund: CONTRACT_ADDRESSES.FUND.FUND_OBJECT_ID
         };
-        throw new Error(`调用create_subscription失败: ${moveCallError.message}, 参数=${JSON.stringify(args)}`);
+        throw new Error(`Failed to call create_subscription: ${moveCallError.message}, params=${JSON.stringify(args)}`);
       }
       
-      // 6. 执行交易
+      // 6. Execute transaction
       const txResult = await this.executeZkLoginTransaction(
         txb,
         zkLoginAddress,
@@ -203,10 +269,10 @@ export class SubscriptionService {
       );
 
       if (txResult.digest) {
-        // 7. 从交易结果中提取创建的subscription对象ID
+        // 7. Extract created subscription object ID from transaction results
         const contractObjectId = this.extractObjectIdFromEvents(txResult.events, 'SubscriptionCreatedEvent');
         
-        // 8. 记录订阅到后端
+        // 8. Record subscription to backend
         const createResponse = await api.post<SubscriptionResponse>(
           API_ENDPOINTS.SUBSCRIPTION.CREATE,
           {
@@ -227,24 +293,35 @@ export class SubscriptionService {
         } else {
           return {
             success: false,
-            error: `订阅记录创建失败: ${createResponse.error?.message || '未知错误'}`
+            error: `Failed to create subscription record: ${createResponse.error?.message || 'Unknown error'}`
           };
         }
       } else {
         return {
           success: false,
-          error: "交易执行失败",
+          error: "Transaction execution failed",
         };
       }
     } catch (error: any) {
       return {
         success: false,
-        error: `创建订阅失败: ${error.message}`
+        error: `Failed to create subscription: ${error.message}`
       };
     }
   }
   
-  // 续订订阅
+  /**
+   * Renews an existing subscription
+   * Processes payment for the next period and extends subscription duration
+   * 
+   * @param {RenewSubscriptionRequest} request - Subscription renewal parameters
+   * @param {string} zkLoginAddress - User's zkLogin address
+   * @param {Ed25519Keypair} ephemeralKeyPair - Ephemeral keypair for signing
+   * @param {PartialZkLoginSignature} partialSignature - Partial zkLogin signature
+   * @param {string} userSalt - User's salt value
+   * @param {any} decodedJwt - Decoded JWT information
+   * @returns {Promise<RenewSubscriptionResponse>} Result of subscription renewal
+   */
   async renewSubscription(
     request: RenewSubscriptionRequest,
     zkLoginAddress: string,
@@ -254,11 +331,11 @@ export class SubscriptionService {
     decodedJwt: any
   ): Promise<RenewSubscriptionResponse> {
     try {
-      // 创建交易
+      // Create transaction
       const txb = new Transaction();
       txb.setSender(zkLoginAddress);
       
-      // 1. 获取订阅详情
+      // 1. Get subscription details
       const queryParams = new URLSearchParams();
       queryParams.append('subscription_id', request.subscription_id);
       const subscriptionResponse = await api.get<SubscriptionResponse>(
@@ -266,38 +343,38 @@ export class SubscriptionService {
       );
       
       if (!subscriptionResponse.success || !subscriptionResponse.data?.subscription) {
-        throw new Error(`获取订阅详情失败: ${subscriptionResponse.error?.message || '未知错误'}`);
+        throw new Error(`Failed to retrieve subscription details: ${subscriptionResponse.error?.message || 'Unknown error'}`);
       }
       
       const subscription = subscriptionResponse.data.subscription;
       
-      // 2. 检查合约对象ID是否存在
+      // 2. Check if contract object ID exists
       if (!subscription.contract_object_id) {
-        throw new Error('订阅合约对象ID不存在，无法续订');
+        throw new Error('Subscription contract object ID does not exist, cannot renew');
       }
       
-      // 3. 获取计划详情
+      // 3. Get plan details
       const plan = await this.getSubscriptionPlan(subscription.plan_id);
       
-      // 4. 获取支付金额
+      // 4. Get payment amount
       const paymentAmount = toTokenAmount(plan.price, TOKENS.TEST_USDT);
       
-      // 5. 准备支付代币
+      // 5. Prepare payment token
       const paymentCoin = await this.preparePaymentCoin(txb, zkLoginAddress, BigInt(paymentAmount));
       
-      // 6. 调用renew_subscription方法
+      // 6. Call renew_subscription method
       txb.moveCall({
         target: `${CONTRACT_ADDRESSES.SUBSCRIPTION.PACKAGE_ID}::subscription::renew_subscription`,
         arguments: [
-          txb.object(subscription.contract_object_id), // 订阅对象ID
-          paymentCoin, // 拆分后的代币作为支付
+          txb.object(subscription.contract_object_id), // Subscription object ID
+          paymentCoin, // Split token as payment
           txb.object(COMMON_CONTRACT.CLOCK),
           txb.object(CONTRACT_ADDRESSES.AUTHENTICATION.REGISTRY_OBJECT_ID),
           txb.object(CONTRACT_ADDRESSES.FUND.FUND_OBJECT_ID)
         ]
       });
       
-      // 7. 执行交易
+      // 7. Execute transaction
       const txResult = await this.executeZkLoginTransaction(
         txb,
         zkLoginAddress,
@@ -308,7 +385,7 @@ export class SubscriptionService {
       );
       
       if (txResult.digest) {
-        // 8. 记录续订到后端
+        // 8. Record renewal to backend
         const renewResponse = await api.post<SubscriptionResponse>(
           API_ENDPOINTS.SUBSCRIPTION.RENEW,
           {
@@ -326,24 +403,35 @@ export class SubscriptionService {
         } else {
           return {
             success: false,
-            error: `续订记录创建失败: ${renewResponse.error?.message || '未知错误'}`
+            error: `Failed to create renewal record: ${renewResponse.error?.message || 'Unknown error'}`
           };
         }
       } else {
         return {
           success: false,
-          error: "交易执行失败"
+          error: "Transaction execution failed"
         };
       }
     } catch (error: any) {
       return {
         success: false,
-        error: `订阅续订失败: ${error.message}`
+        error: `Subscription renewal failed: ${error.message}`
       };
     }
   }
   
-  // 取消订阅
+  /**
+   * Cancels an active subscription
+   * Calls the contract's cancel_subscription method
+   * 
+   * @param {CancelSubscriptionRequest} request - Subscription cancellation parameters
+   * @param {string} zkLoginAddress - User's zkLogin address
+   * @param {Ed25519Keypair} ephemeralKeyPair - Ephemeral keypair for signing
+   * @param {PartialZkLoginSignature} partialSignature - Partial zkLogin signature
+   * @param {string} userSalt - User's salt value
+   * @param {any} decodedJwt - Decoded JWT information
+   * @returns {Promise<CancelSubscriptionResponse>} Result of subscription cancellation
+   */
   async cancelSubscription(
     request: CancelSubscriptionRequest,
     zkLoginAddress: string,
@@ -353,39 +441,39 @@ export class SubscriptionService {
     decodedJwt: any
   ): Promise<CancelSubscriptionResponse> {
     try {
-      // 创建交易
+      // Create transaction
       const txb = new Transaction();
       txb.setSender(zkLoginAddress);
       
-      // 1. 获取订阅详情
+      // 1. Get subscription details
       const response = await api.get<ApiResponse>(API_ENDPOINTS.SUBSCRIPTION.STATUS);
       
-      // 确保数据结构正确
+      // Ensure data structure is correct
       if (!response.success) {
-        throw new Error(`获取订阅详情失败: ${response.error?.message || '未知错误'}`);
+        throw new Error(`Failed to retrieve subscription details: ${response.error?.message || 'Unknown error'}`);
       }
       
-      // 将返回数据转换为标准格式
+      // Convert return data to standard format
       const subscriptionsData = response.data as SubscriptionsResponse;
       if (!subscriptionsData.subscriptions || !Array.isArray(subscriptionsData.subscriptions)) {
-        throw new Error('获取订阅详情失败: 返回数据格式不正确');
+        throw new Error('Failed to retrieve subscription details: Invalid response format');
       }
       
-      // 从返回的订阅列表中找到目标订阅
+      // Find target subscription from returned list
       const subscription = subscriptionsData.subscriptions.find(
         (sub: Subscription) => sub.id === request.subscription_id
       );
       
       if (!subscription) {
-        throw new Error('未找到指定的订阅');
+        throw new Error('Subscription not found');
       }
       
-      // 2. 检查合约对象ID是否存在
+      // 2. Check if contract object ID exists
       if (!subscription.contract_object_id) {
-        throw new Error('订阅合约对象ID不存在，无法取消');
+        throw new Error('Subscription contract object ID does not exist, cannot cancel');
       }
       
-      // 3. 调用cancel_subscription方法
+      // 3. Call cancel_subscription method
       txb.moveCall({
         target: `${CONTRACT_ADDRESSES.SUBSCRIPTION.PACKAGE_ID}::subscription::cancel_subscription`,
         arguments: [
@@ -394,7 +482,7 @@ export class SubscriptionService {
         ]
       });
       
-      // 4. 执行交易
+      // 4. Execute transaction
       const txResult = await this.executeZkLoginTransaction(
         txb,
         zkLoginAddress,
@@ -404,9 +492,9 @@ export class SubscriptionService {
         decodedJwt
       );
       
-      // 5. 处理交易结果
+      // 5. Process transaction result
       if (txResult.digest) {
-        // 记录取消到后端
+        // Record cancellation to backend
         const cancelResponse = await api.post<ApiResponse>(
           API_ENDPOINTS.SUBSCRIPTION.CANCEL,
           {
@@ -418,23 +506,28 @@ export class SubscriptionService {
         return {
           success: cancelResponse.success,
           error: cancelResponse.success ? undefined : 
-            `取消订阅记录失败: ${cancelResponse.error?.message || '未知错误'}`
+            `Failed to record subscription cancellation: ${cancelResponse.error?.message || 'Unknown error'}`
         };
       } else {
         return {
           success: false,
-          error: "交易执行失败"
+          error: "Transaction execution failed"
         };
       }
     } catch (error: any) {
       return {
         success: false,
-        error: `取消订阅失败: ${error.message || '未知异常'}`
+        error: `Failed to cancel subscription: ${error.message || 'Unknown exception'}`
       };
     }
   }
   
-  // 切换自动续订状态
+  /**
+   * Toggles auto-renewal setting for a subscription
+   * 
+   * @param {ToggleAutoRenewRequest} request - Auto-renew toggle parameters
+   * @returns {Promise<ToggleAutoRenewResponse>} Result of toggle operation
+   */
   async toggleAutoRenew(
     request: ToggleAutoRenewRequest
   ): Promise<ToggleAutoRenewResponse> {
@@ -449,18 +542,22 @@ export class SubscriptionService {
       } else {
         return {
           success: false,
-          error: response.error?.message || '切换自动续订状态失败'
+          error: response.error?.message || 'Failed to toggle auto-renewal status'
         };
       }
     } catch (error: any) {
       return {
         success: false,
-        error: `切换自动续订状态过程中发生错误: ${error.message || '未知异常'}`
+        error: `Error during auto-renewal toggle process: ${error.message || 'Unknown exception'}`
       };
     }
   }
   
-  // 获取订阅状态
+  /**
+   * Retrieves current subscription status for the user
+   * 
+   * @returns {Promise<SubscriptionStatusResponse>} Current subscription status
+   */
   async getSubscriptionStatus(): Promise<SubscriptionStatusResponse> {
     try {
       const response = await api.get<SubscriptionsResponse>(API_ENDPOINTS.SUBSCRIPTION.STATUS);
@@ -474,18 +571,22 @@ export class SubscriptionService {
       } else {
         return {
           success: false,
-          error: response.error?.message || '获取订阅状态失败'
+          error: response.error?.message || 'Failed to retrieve subscription status'
         };
       }
     } catch (error: any) {
       return {
         success: false,
-        error: `获取订阅状态失败: ${error.message || '未知异常'}`
+        error: `Failed to retrieve subscription status: ${error.message || 'Unknown exception'}`
       };
     }
   }
   
-  // 获取订阅计划列表
+  /**
+   * Retrieves available subscription plans
+   * 
+   * @returns {Promise<{success: boolean, plans?: any[], error?: string}>} List of subscription plans
+   */
   async getSubscriptionPlans(): Promise<{success: boolean, plans?: any[], error?: string}> {
     try {
       const response = await api.get<PlansResponse>(API_ENDPOINTS.SUBSCRIPTION.PLANS);
@@ -498,13 +599,13 @@ export class SubscriptionService {
       } else {
         return {
           success: false,
-          error: response.error?.message || '获取订阅计划失败'
+          error: response.error?.message || 'Failed to retrieve subscription plans'
         };
       }
     } catch (error: any) {
       return {
         success: false,
-        error: `获取订阅计划失败: ${error.message || '未知异常'}`
+        error: `Failed to retrieve subscription plans: ${error.message || 'Unknown exception'}`
       };
     }
   }

@@ -1,3 +1,7 @@
+/**
+ * Service for handling zkLogin authentication operations on the SUI blockchain
+ * Provides methods for registering addresses and binding wallets
+ */
 import { SuiClient } from '@mysten/sui/client';
 import { Transaction } from '@mysten/sui/transactions';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
@@ -6,25 +10,45 @@ import { PartialZkLoginSignature } from '@/interfaces/ZkLogin';
 import { useZkLoginTransactions } from '@/hooks/useZkLoginTransactions';
 import { SUI_RPC_URL } from '@/config/client';
 
-// Sui客户端配置
+// SUI client configuration
 const FULLNODE_URL = SUI_RPC_URL;
 export const suiClient = new SuiClient({ url: FULLNODE_URL });
 
 
-
+/**
+ * Service for managing contract interactions related to zkLogin authentication
+ * Handles zkLogin address registration and wallet binding operations
+ */
 export class ContractService {
   private client: SuiClient;
 
+  /**
+   * Creates a new instance of ContractService
+   * Initializes connection to SUI blockchain
+   */
   constructor() {
     this.client = suiClient;
   }
 
-  // 获取Sui客户端
+  /**
+   * Gets the SUI client instance
+   * 
+   * @returns {SuiClient} The SUI client instance
+   */
   getClient(): SuiClient {
     return this.client;
   }
 
-  // 注册zkLogin地址 - 使用zkLogin签名
+  /**
+   * Registers a zkLogin address with the authentication registry
+   * 
+   * @param {string} zkLoginAddress - The zkLogin address to register
+   * @param {Ed25519Keypair} ephemeralKeyPair - Ephemeral keypair for signing
+   * @param {PartialZkLoginSignature} partialSignature - Partial zkLogin signature
+   * @param {string} userSalt - User's salt value
+   * @param {any} decodedJwt - Decoded JWT information
+   * @returns {Promise<{ success: boolean; txId?: string; error?: string }>} Result of the registration
+   */
   async registerZkLoginAddress(
     zkLoginAddress: string,
     ephemeralKeyPair: Ed25519Keypair,
@@ -33,12 +57,12 @@ export class ContractService {
     decodedJwt: any
   ): Promise<{ success: boolean; txId?: string; error?: string }> {
     try {
-      console.log("使用的zkLogin发送者地址:", zkLoginAddress);
+      console.log("Using zkLogin sender address:", zkLoginAddress);
       
-      // 创建交易块
+      // Create transaction block
       const txb = new Transaction();
       
-      // 调用register_zk_address方法
+      // Call register_zk_address method
         txb.moveCall({
           target: `${CONTRACT_ADDRESSES.AUTHENTICATION.PACKAGE_ID}::${CONTRACT_ADDRESSES.AUTHENTICATION.MODULE_NAME}::register_zk_address`,
           arguments: [
@@ -46,7 +70,7 @@ export class ContractService {
           ]
         });
       
-      // 使用zkLogin签名并执行交易
+      // Sign and execute transaction with zkLogin
       const { signAndExecuteTransaction } = useZkLoginTransactions();
       
       try {
@@ -59,24 +83,24 @@ export class ContractService {
           decodedJwt
         );
         
-        console.log("交易完整结果:", JSON.stringify(result, null, 2));
+        console.log("Complete transaction result:", JSON.stringify(result, null, 2));
         
       if (result.effects?.status?.status === "success") {
-        console.log("register_zk_address交易执行成功");
+        console.log("register_zk_address transaction succeeded");
         return {
           success: true,
           txId: result.digest
         };
       } else {
-          console.error("交易执行失败详情:", JSON.stringify(result.effects, null, 2));
+          console.error("Transaction execution failed details:", JSON.stringify(result.effects, null, 2));
           
-          // 提取更详细的错误信息
+          // Extract more detailed error information
           let errorDetails = '';
           
           if (result.effects?.status?.error) {
             errorDetails = result.effects.status.error;
           } else if (result.effects) {
-            // 尝试从effects中获取更多信息
+            // Try to get more information from effects
             errorDetails = JSON.stringify(result.effects, null, 2);
           } else if (result.errors && result.errors.length > 0) {
             errorDetails = JSON.stringify(result.errors, null, 2);
@@ -86,18 +110,18 @@ export class ContractService {
           
           return {
             success: false,
-            error: `交易执行失败: ${errorDetails}`
+            error: `Transaction execution failed: ${errorDetails}`
           };
         }
       } catch (executeError: any) {
-        // 更详细的错误日志
-        console.error("执行交易异常详情:", executeError);
-        console.error("异常堆栈:", executeError.stack);
+        // More detailed error logging
+        console.error("Execute transaction exception details:", executeError);
+        console.error("Exception stack:", executeError.stack);
         
         let errorMsg = '';
         if (typeof executeError === 'object') {
           try {
-            // 尝试提取所有可能的错误信息
+            // Try to extract all possible error information
             errorMsg = JSON.stringify({
               message: executeError.message,
               name: executeError.name,
@@ -114,19 +138,24 @@ export class ContractService {
         
         return {
           success: false,
-          error: `执行交易失败: ${errorMsg}`
+          error: `Transaction execution failed: ${errorMsg}`
         };
       }
     } catch (error: any) {
-      console.error('注册zkLogin地址失败:', error);
+      console.error('Failed to register zkLogin address:', error);
       return {
         success: false,
-        error: error.message || '注册zkLogin地址时发生未知错误'
+        error: error.message || 'Unknown error occurred while registering zkLogin address'
       };
     }
   }
 
-  // 检查地址是否已认证
+  /**
+   * Checks if an address is verified in the authentication registry
+   * 
+   * @param {string} address - The address to check
+   * @returns {Promise<{ verified: boolean; error?: string }>} Result indicating if address is verified
+   */
   async isAddressVerified(address: string): Promise<{ verified: boolean; error?: string }> {
     try {
       const txb = new Transaction();
@@ -140,30 +169,40 @@ export class ContractService {
         transactionBlock: txb
       });
       
-      // 检查返回值 - Sui返回的格式是 [number[], string]，第一个元素是BCS编码，第二个是类型
+      // Check return value - Sui returns format is [number[], string], first element is BCS encoded, second is type
       if (result.results && result.results[0]?.returnValues && result.results[0].returnValues.length > 0) {
-        // 获取原始返回值 - 布尔值在Sui中通常用0表示false，1表示true
-        const bcsBytes = result.results[0].returnValues[0][0]; // 获取BCS编码的字节数组
+        // Get raw return value - boolean in Sui is typically represented as 0 for false, 1 for true
+        const bcsBytes = result.results[0].returnValues[0][0]; // Get BCS encoded byte array
         
-        // 通常布尔值会被编码为单个字节，1表示true，0表示false
+        // Typically boolean will be encoded as a single byte, 1 for true, 0 for false
         if (Array.isArray(bcsBytes) && bcsBytes.length > 0) {
           return { verified: bcsBytes[0] === 1 };
         }
         
-        console.log("返回值解析:", result.results[0].returnValues);
+        console.log("Return value parsing:", result.results[0].returnValues);
       }
       
-      return { verified: false, error: "无法解析返回值" };
+      return { verified: false, error: "Unable to parse return value" };
     } catch (error: any) {
-      console.error("检查地址验证状态失败:", error);
+      console.error("Failed to check address verification status:", error);
       return {
         verified: false,
-        error: `检查地址验证失败: ${error.message || JSON.stringify(error)}`
+        error: `Address verification check failed: ${error.message || JSON.stringify(error)}`
       };
     }
   }
 
-  // 绑定钱包地址 - 使用zkLogin签名
+  /**
+   * Binds a wallet address to user ID in the authentication registry
+   * 
+   * @param {string} zkLoginAddress - The zkLogin address to bind
+   * @param {string} userId - User ID to bind to the address
+   * @param {Ed25519Keypair} ephemeralKeyPair - Ephemeral keypair for signing
+   * @param {PartialZkLoginSignature} partialSignature - Partial zkLogin signature
+   * @param {string} userSalt - User's salt value
+   * @param {any} decodedJwt - Decoded JWT information
+   * @returns {Promise<{ success: boolean; txId?: string; error?: string }>} Result of the binding operation
+   */
   async bindWalletAddress(
     zkLoginAddress: string,
     userId: string,
@@ -173,34 +212,34 @@ export class ContractService {
     decodedJwt: any
   ): Promise<{ success: boolean; txId?: string; error?: string }> {
     try {
-      console.log("使用的zkLogin发送者地址:", zkLoginAddress);
-      console.log("绑定的用户ID (原始):", userId);
+      console.log("Using zkLogin sender address:", zkLoginAddress);
+      console.log("Binding user ID (original):", userId);
       
-      // 创建交易块
+      // Create transaction block
       const txb = new Transaction();
       
-      // 确保userId是字符串并且不包含特殊字符
-      // 我们只保留字母、数字和基本标点符号
+      // Ensure userId is a string and doesn't contain special characters
+      // We only keep letters, numbers and basic punctuation
       const safeUserId = String(userId).replace(/[^\w\s\-]/g, '');
-      console.log("过滤后的userId:", safeUserId);
+      console.log("Filtered userId:", safeUserId);
       
-      // 转换userId为Sui Move的vector<u8>
+      // Convert userId to Sui Move's vector<u8>
       const userIdBytes = new TextEncoder().encode(safeUserId);
-      console.log("转换后的userId字节:", Array.from(userIdBytes));
+      console.log("Converted userId bytes:", Array.from(userIdBytes));
       
-      // 使用更简单的方式创建vector<u8>类型参数
-      // 默认情况下使用纯字符串，如果出错，尝试更简单的值
+      // Use simpler approach to create vector<u8> type parameter
+      // Default to using pure string, if error, try simpler value
       let userIdArg;
       try {
         userIdArg = txb.pure.vector('u8', Array.from(userIdBytes));
       } catch (error) {
-        console.error("创建userIdArg失败，尝试使用更简单的值:", error);
-        // 使用简单的"user"字符串作为后备方案
+        console.error("Failed to create userIdArg, trying simpler value:", error);
+        // Use simple "user" string as fallback
         const fallbackBytes = new TextEncoder().encode("user");
         userIdArg = txb.pure.vector('u8', Array.from(fallbackBytes));
       }
       
-      // 调用bind_wallet_address方法
+      // Call bind_wallet_address method
       txb.moveCall({
         target: `${CONTRACT_ADDRESSES.AUTHENTICATION.PACKAGE_ID}::${CONTRACT_ADDRESSES.AUTHENTICATION.MODULE_NAME}::bind_wallet_address`,
         arguments: [
@@ -209,7 +248,7 @@ export class ContractService {
         ]
       });
       
-      // 使用zkLogin签名并执行交易
+      // Sign and execute transaction with zkLogin
       const { signAndExecuteTransaction } = useZkLoginTransactions();
       
       try {
@@ -222,38 +261,38 @@ export class ContractService {
           decodedJwt
         );
       
-      console.log("交易执行结果:", result);
+      console.log("Transaction execution result:", result);
       
-      // 检查交易是否成功
+      // Check if transaction was successful
       if (result.effects?.status?.status === "success") {
-        console.log("交易执行成功");
+        console.log("Transaction executed successfully");
         return {
           success: true,
           txId: result.digest
         };
       } else {
-        console.error("交易执行失败:", result.effects?.status);
+        console.error("Transaction execution failed:", result.effects?.status);
         return {
           success: false,
-          error: `交易执行失败: ${result.effects?.status?.error || "未知错误"}`
+          error: `Transaction execution failed: ${result.effects?.status?.error || "Unknown error"}`
           };
         }
       } catch (executeError: any) {
-        console.error("执行交易失败:", executeError);
+        console.error("Transaction execution failed:", executeError);
         return {
           success: false,
-          error: `执行交易失败: ${executeError.message}`
+          error: `Transaction execution failed: ${executeError.message}`
         };
       }
     } catch (error: any) {
-      console.error('绑定钱包地址失败:', error);
+      console.error('Binding wallet address failed:', error);
       return {
         success: false,
-        error: error.message || '绑定钱包地址时发生未知错误'
+        error: error.message || 'Unknown error occurred while binding wallet address'
       };
     }
   }
 }
 
-// 导出服务实例
+// Export service instance
 export const contractService = new ContractService(); 
