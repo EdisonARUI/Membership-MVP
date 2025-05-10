@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
 import { ZkLoginState } from '@/components/zklogin/types';
-import { ZkLoginStorage } from '@/utils/storage';
-import { SuiService } from '@/utils/sui';
+import { ZkLoginStorage } from '@/utils/StorageService';
+import { SuiService } from '@/utils/SuiService';
 import { createClient } from '@/utils/supabase/client';
-import { ZkLoginService } from '@/utils/zkLoginService';
-import { AppStorage } from '@/utils/storage';
+import { ZkLoginService } from '@/utils/ZkLoginService';
+import { AppStorage } from '@/utils/StorageService';
 import { AppError } from '@/interfaces/Error';
+import { useLogContext } from '@/contexts/LogContext';
 
-export function useZkLogin(userId?: string, onLog?: (message: string) => void) {
+export function useZkLogin(userId?: string) {
+  const { addLog } = useLogContext();
+  
   // 初始状态
   const [state, setState] = useState<ZkLoginState>({
     zkLoginAddress: ZkLoginStorage.getZkLoginAddress(),
@@ -29,9 +32,7 @@ export function useZkLogin(userId?: string, onLog?: (message: string) => void) {
 
   // 日志处理
   const log = (message: string) => {
-    if (onLog) {
-      onLog(message);
-    }
+    addLog(message);
     // 始终在控制台记录日志，便于调试
     console.log(`[zkLogin] ${message}`);
   };

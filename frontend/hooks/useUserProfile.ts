@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/utils/supabase/client';
-import { useLog } from './useLog';
+import { useLogContext } from '@/contexts/LogContext';
 
 export function useUserProfile() {
   const [userProfile, setUserProfile] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const { addLog } = useLog();
+  const { addLog } = useLogContext();
   const supabase = createClient();
 
   // 获取用户资料

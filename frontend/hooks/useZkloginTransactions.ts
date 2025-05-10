@@ -107,6 +107,10 @@ export function useZkLoginTransactions(logFn?: LogFunction) {
       const result = await client.executeTransactionBlock({
       transactionBlock: bytes,
       signature: zkLoginSignature,
+      options: {
+        showEvents: true,
+        showEffects: true
+      }
     });
       
       log(`交易执行完成，交易ID: ${result.digest}`);

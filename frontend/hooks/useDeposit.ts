@@ -1,12 +1,12 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useSuiPrice } from '@/contexts/SuiPriceContext';
-import { useLog } from './useLog';
+import { useLogContext } from '@/contexts/LogContext';
 
 const FAUCET_URL = 'https://faucet.devnet.sui.io/v2/gas';
 
 export function useRecharge() {
   const [showRechargeDialog, setShowRechargeDialog] = useState(false);
-  const { addLog } = useLog();
+  const { addLog } = useLogContext();
   const { suiPrice, isLoadingPrice, getSuiPrice } = useSuiPrice();
   
   const handleRecharge = async (amount: string) => {
