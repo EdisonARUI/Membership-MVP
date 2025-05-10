@@ -8,7 +8,7 @@
  * - Synchronization of logs across components via custom events
  * - Singleton memory cache for log sharing
  */
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { AppStorage } from '@/utils/StorageService';
 
 /**
@@ -60,56 +60,76 @@ let memoryLogsCache: string[] = [];
  * @returns {LogState} The log state and operations
  */
 export function useLog(): LogState {
+  // Initialize state from storage only once
   const [logs, setLogs] = useState<string[]>(() => {
-    // Initialize logs from AppStorage
     const storedLogs = AppStorage.getLogs();
     memoryLogsCache = storedLogs;
     return storedLogs;
   });
-  
+
+  // Use refs to track update state and prevent loops
+  const isUpdatingRef = useRef(false);
+  const lastUpdateRef = useRef<number>(Date.now());
+
+  // Handle storage change events
   useEffect(() => {
-    // Event handler for log updates from other components
     const handleStorageChange = () => {
-      setLogs([...memoryLogsCache]);
+      // Prevent rapid consecutive updates
+      const now = Date.now();
+      if (now - lastUpdateRef.current < 100) {
+        return;
+      }
+      lastUpdateRef.current = now;
+
+      if (!isUpdatingRef.current) {
+        const newLogs = AppStorage.getLogs();
+        if (JSON.stringify(newLogs) !== JSON.stringify(logs)) {
+          setLogs(newLogs);
+          memoryLogsCache = newLogs;
+        }
+      }
     };
-    // Listen for custom log update events
+
     window.addEventListener(LOG_UPDATED_EVENT, handleStorageChange);
-    // Cleanup event listener on unmount
     return () => window.removeEventListener(LOG_UPDATED_EVENT, handleStorageChange);
-  }, []);
-  
-  useEffect(() => {
-    // Persist logs to AppStorage if changed
-    if (JSON.stringify(logs) !== JSON.stringify(memoryLogsCache)) {
-      AppStorage.setLogs(logs);
-      memoryLogsCache = [...logs];
-    }
   }, [logs]);
-  
+
   /**
    * Adds a log message, updates state, persists to storage, and notifies other components
    * @param log - The log message to add
    */
-  const addLog = (log: string) => {
-    setLogs(prev => {
-      const newLogs = [...prev, log];
+  const addLog = useCallback((log: string) => {
+    if (isUpdatingRef.current) return;
+
+    isUpdatingRef.current = true;
+    try {
+      const newLogs = [...logs, log];
+      setLogs(newLogs);
       memoryLogsCache = newLogs;
       AppStorage.setLogs(newLogs);
       window.dispatchEvent(new CustomEvent(LOG_UPDATED_EVENT));
-      return newLogs;
-    });
-  };
-  
+    } finally {
+      isUpdatingRef.current = false;
+    }
+  }, [logs]);
+
   /**
    * Clears all logs, updates state, persists to storage, and notifies other components
    */
-  const clearLogs = () => {
-    setLogs([]);
-    memoryLogsCache = [];
-    AppStorage.setLogs([]);
-    window.dispatchEvent(new CustomEvent(LOG_UPDATED_EVENT));
-  };
-  
+  const clearLogs = useCallback(() => {
+    if (isUpdatingRef.current) return;
+
+    isUpdatingRef.current = true;
+    try {
+      setLogs([]);
+      memoryLogsCache = [];
+      AppStorage.setLogs([]);
+      window.dispatchEvent(new CustomEvent(LOG_UPDATED_EVENT));
+    } finally {
+      isUpdatingRef.current = false;
+    }
+  }, []);
+
   return { logs, addLog, clearLogs };
 }
 
