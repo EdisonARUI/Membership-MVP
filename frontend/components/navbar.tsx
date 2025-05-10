@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { useUser } from "@/hooks/use-user";
+import { useUser } from "@/hooks/useUser";
 
 export function Navbar() {
   const { user } = useUser();

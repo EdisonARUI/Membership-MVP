@@ -1,13 +1,14 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { Sparkles, Wallet, User, LogOut, Gift } from "lucide-react";
-import { useUser } from "@/hooks/use-user";
+import { useUser } from "@/hooks/useUser";
 import { createClient } from "@/utils/supabase/client";
-import { useLog } from "@/hooks/useLog";
+import { useLogContext } from '@/contexts/LogContext';
 import { useZkLogin } from "@/contexts/ZkLoginContext";
 import { useAuth } from "@/contexts/AuthContext";
 import LotteryDialog from "../lottery/LotteryDialog";
 import { FcGoogle } from "react-icons/fc";
+import { useDeposit } from "@/contexts/DepositContext";
 
 interface HeaderProps {
   onRechargeClick: () => void;
@@ -18,7 +19,7 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
   const { user } = useUser();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
-  const { addLog } = useLog();
+  const { addLog } = useLogContext();
   const supabase = createClient();
   
   // 使用AuthContext处理登录逻辑，ZkLoginContext只用于状态获取
@@ -27,6 +28,7 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
   const { zkLoginAddress, loading } = state;
   
   const [showLotteryDialog, setShowLotteryDialog] = useState(false);
+  const { showDepositDialog, setShowDepositDialog } = useDeposit();
 
   const handleGoogleLogin = async () => {
     try {
@@ -72,14 +74,14 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         <Link href="/" className="flex items-center space-x-2 text-xl font-bold">
           <Sparkles className="h-6 w-6 text-yellow-400" />
-          <span>FREEHOME</span>
+          <span>Membership</span>
         </Link>
 
         <div className="flex items-center space-x-4">
           {user ? (
             <>
               <button 
-                onClick={onRechargeClick}
+                onClick={() => setShowDepositDialog(true)}
                 className="px-4 py-2 text-white hover:text-yellow-400 transition-colors flex items-center"
               >
                 <Wallet className="h-4 w-4 mr-1" />

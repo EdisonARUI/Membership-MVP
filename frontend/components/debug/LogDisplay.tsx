@@ -1,9 +1,11 @@
 import { useZkLogin } from "@/contexts/ZkLoginContext";
 import { useState, useEffect } from "react";
-import { SuiService } from "@/utils/sui";
+import { SuiService } from "@/utils/SuiService";
+import { useLogContext } from "@/contexts/LogContext";
 
 export function LogDisplay() {
-  const { clearState, state, logs, clearLogs } = useZkLogin();
+  const { clearState, state } = useZkLogin();
+  const { logs, clearLogs, addLog } = useLogContext();
   const [showFullErrors, setShowFullErrors] = useState(false);
   const [networkStatus, setNetworkStatus] = useState({
     suiNode: "检查中...",
@@ -45,10 +47,17 @@ export function LogDisplay() {
     window.location.reload();
   };
   
+  // 处理清除日志
+  const handleClearLogs = () => {
+    clearLogs();
+    // 可以添加提示
+    addLog("日志已清空");
+  };
+  
   // 查找并处理日志中的错误响应信息
   const processedLogs = showFullErrors 
     ? logs 
-    : logs.map(log => {
+    : logs.map((log: string) => {
         if (log.includes('非预期的响应格式') || log.includes('错误响应:')) {
           // 保留基本错误信息
           return log.split('非预期的响应格式')[0] || log.split('错误响应:')[0] || log;
@@ -80,7 +89,7 @@ export function LogDisplay() {
             重置zkLogin
           </button>
           <button 
-            onClick={clearLogs}
+            onClick={handleClearLogs}
             className="px-2 py-1 text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded border border-red-500/30"
           >
             清空日志
@@ -128,7 +137,7 @@ export function LogDisplay() {
           <p className="text-slate-400">暂无日志</p>
         ) : (
           <ul className="space-y-1 text-xs font-mono">
-            {processedLogs.map((log, index) => (
+            {processedLogs.map((log: string, index: number) => (
               <li key={index} className={`pb-1 border-b border-slate-700 ${log.includes('错误') || log.includes('失败') ? 'text-red-400' : ''}`}>
                 {log}
                 {showFullErrors && logs[index].includes('错误响应:') && (

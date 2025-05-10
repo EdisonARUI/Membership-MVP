@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { X, CreditCard, RefreshCw } from "lucide-react";
-import { useLog } from "@/hooks/useLog";
+import { useLogContext } from '@/contexts/LogContext';
 
 interface PaymentDialogProps {
   isOpen: boolean;
@@ -16,7 +16,7 @@ export function PaymentDialog({
   onPaymentConfirm,
 }: PaymentDialogProps) {
   const [loading, setLoading] = useState(false);
-  const { addLog } = useLog();
+  const { addLog } = useLogContext();
 
   if (!isOpen) return null;
 

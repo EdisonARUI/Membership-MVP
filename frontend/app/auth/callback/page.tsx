@@ -4,16 +4,16 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { useAuth } from '@/contexts/AuthContext';
-import { useLog } from '@/hooks/useLog';
+import { useLogContext } from '@/contexts/LogContext';
 import { LogDisplay } from '@/components/debug/LogDisplay';
-import { ZkLoginService } from '@/utils/zkLoginService';
+import { ZkLoginService } from '@/utils/ZkLoginService';
 
 export default function AuthCallback() {
   const [status, setStatus] = useState('处理登录...');
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectPath = searchParams.get('redirect') || '/';
-  const { addLog } = useLog();
+  const { addLog } = useLogContext();
   const { completeAuthentication } = useAuth();
 
   const supabase = createBrowserClient(

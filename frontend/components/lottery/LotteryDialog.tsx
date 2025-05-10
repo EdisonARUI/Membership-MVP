@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { X, Loader2, Gift } from 'lucide-react';
-import { useUser } from '@/hooks/use-user';
+import { useUser } from '@/hooks/useUser';
 import { useZkLogin } from '@/contexts/ZkLoginContext';
-import { useLog } from '@/hooks/useLog';
-import { toast } from 'react-hot-toast';
-import { LotteryService } from '@/utils/lotteryService';
-import { LotteryRecord, LotteryHistoryResponse, DrawResult } from '@/interfaces/Lottery';
+import { useLogContext } from '@/contexts/LogContext';
+import { useLottery } from '@/contexts/LotteryContext';
+import { LotteryRecord } from '@/interfaces/Lottery';
 
 interface LotteryDialogProps {
   isOpen: boolean;
@@ -23,29 +22,19 @@ export default function LotteryDialog({ isOpen, onClose }: LotteryDialogProps) {
   const { user } = useUser();
   const { state } = useZkLogin();
   const { zkLoginAddress } = state;
-  const { addLog } = useLog();
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{
-    success: boolean;
-    amount?: number;
-    message?: string;
-  } | null>(null);
-  const [lotteryHistory, setLotteryHistory] = useState<LotteryHistoryItem[]>([]);
-  const [totalStats, setTotalStats] = useState<{
-    count: number;
-    amount: number;
-  }>({ count: 0, amount: 0 });
-
-  useEffect(() => {
-    if (isOpen) {
-      fetchLotteryHistory();
-      
-      // 确保zkLogin初始化
-      if (!zkLoginAddress) {
-        addLog("zkLogin地址未初始化，请先完成登录");
-      }
-    }
-  }, [isOpen, zkLoginAddress]);
+  const { addLog } = useLogContext();
+  
+  // 使用LotteryContext
+  const { 
+    loading, 
+    result, 
+    lotteryHistory,
+    lotteryStats, 
+    executeDraw,
+    fetchLotteryHistory,
+    fetchLotteryStats,
+    resetUpdateTimestamp
+  } = useLottery();
 
   // 转换API记录为UI展示格式
   const convertToHistoryItems = (records: LotteryRecord[]): LotteryHistoryItem[] => {
@@ -55,83 +44,48 @@ export default function LotteryDialog({ isOpen, onClose }: LotteryDialogProps) {
       time: new Date(record.created_at)
     }));
   };
-
-  const fetchLotteryHistory = async () => {
-    try {
-      if (zkLoginAddress) {
-        const lotteryService = new LotteryService();
-        // 获取用户的抽奖历史
-        const response = await lotteryService.getLotteryHistory(zkLoginAddress, 10, false);
-        
-        if (response.success && response.records) {
-          setLotteryHistory(convertToHistoryItems(response.records));
-          
-          // 设置统计数据
-          setTotalStats({
-            count: response.total_count || 0,
-            amount: response.total_amount || 0
-          });
-          return;
-        }
-      }
-      
-      // 如果无法获取真实数据，使用空数组
-      setLotteryHistory([]);
-      setTotalStats({ count: 0, amount: 0 });
-    } catch (error) {
-      console.error('获取抽奖历史失败:', error);
-      setLotteryHistory([]);
+  
+  // 组件加载时获取抽奖历史和统计
+  useEffect(() => {
+    if (isOpen && zkLoginAddress) {
+      fetchLotteryHistory(10, false);
+      fetchLotteryStats('all');
+    } else if (isOpen && !zkLoginAddress) {
+      addLog("zkLogin地址未初始化，请先完成登录");
     }
-  };
+    
+    // 对话框关闭时，重置时间戳以确保下次打开时获取最新数据
+    return () => {
+      if (!isOpen) {
+        resetUpdateTimestamp();
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, zkLoginAddress]);
 
+  // 处理抽奖按钮点击
   const handleDraw = async () => {
     if (!user || !zkLoginAddress) {
-      toast.error('请先登录并完成zkLogin认证');
+      addLog("抽奖失败：未登录或未初始化zkLogin地址");
       return;
     }
 
-    setLoading(true);
-    setResult(null);
     addLog("开始抽奖...");
-
-    try {
-      // 调用抽奖服务，抽奖逻辑转移到LotteryService中处理
-      const lotteryService = new LotteryService();
-      addLog("调用抽奖合约...");
-      const drawResult = await lotteryService.instantDraw();
-      
-      addLog(`抽奖结果: ${JSON.stringify(drawResult)}`);
-      
-      if (drawResult.success) {
-        setResult({
-          success: true,
-          amount: drawResult.amount,
-          message: drawResult.amount ? `恭喜！你赢得了 ${drawResult.amount / 1000000000} SUI` : '很遗憾，未中奖'
-        });
-        
-        // 重新获取最新抽奖历史，包括本次结果
-        fetchLotteryHistory();
-      } else {
-        setResult({
-          success: false,
-          message: drawResult.error || '抽奖失败'
-        });
-        toast.error(`抽奖失败: ${drawResult.error}`);
-      }
-    } catch (error: any) {
-      addLog(`抽奖过程中发生错误: ${error.message}`);
-      console.error('抽奖错误:', error);
-      setResult({
-        success: false,
-        message: `抽奖失败: ${error.message}`
-      });
-      toast.error(`抽奖失败: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
+    await executeDraw();
   };
 
   if (!isOpen) return null;
+
+  // 准备显示的历史记录
+  const historyItems: LotteryHistoryItem[] = lotteryHistory && lotteryHistory.records 
+    ? convertToHistoryItems(lotteryHistory.records)
+    : [];
+    
+  // 获取统计数据
+  const totalStats = {
+    count: lotteryStats?.total_count || 0,
+    amount: lotteryStats?.total_amount || 0
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -192,8 +146,8 @@ export default function LotteryDialog({ isOpen, onClose }: LotteryDialogProps) {
             )}
           </h3>
           <div className="space-y-2">
-            {lotteryHistory.length > 0 ? (
-              lotteryHistory.map((item, idx) => (
+            {historyItems.length > 0 ? (
+              historyItems.map((item, idx) => (
                 <div key={idx} className={`flex justify-between items-center p-2 rounded ${item.amount > 0 ? 'bg-green-800 bg-opacity-20' : 'bg-slate-700 bg-opacity-50'}`}>
                   <div className="overflow-hidden">
                     <p className="text-xs text-gray-400">{item.time.toLocaleString()}</p>

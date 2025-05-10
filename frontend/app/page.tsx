@@ -1,132 +1,102 @@
 "use client";
 
-import { useLog } from "@/hooks/useLog";
-import { useRecharge } from "@/hooks/useRecharge";
-import { SuiPriceProvider, useSuiPrice } from "@/contexts/SuiPriceContext";
-import { RechargeDialog } from "@/components/wallet/RechargeDialog";
+// import { SuiPriceProvider, useSuiPrice } from "@/contexts/SuiPriceContext";
+import DepositDialog from "@/components/deposit/DepositDialog";
 import { LogDisplay } from "@/components/debug/LogDisplay";
 import { Header } from "@/components/layout/Header";
 import { SubscriptionPlans } from "@/components/subscription/SubscriptionPlans";
 import { SubscriptionManagementDialog } from "@/components/subscription/SubscriptionManagementDialog";
 import { PaymentDialog } from "@/components/payment/PaymentDialog";
-import { ZkLoginStatus } from "@/components/zklogin/ZkLoginStatus";
-import { useAuth } from "@/contexts/AuthContext";
 import { useSubscriptionContext } from "@/contexts/SubscriptionContext";
 import { usePayment } from "@/contexts/PaymentContext";
 import { ZkLoginProvider, useZkLogin } from "@/contexts/ZkLoginContext";
-import { useEffect } from "react";
+import { useDeposit } from "@/contexts/DepositContext";
+import { LogProvider } from "@/contexts/LogContext";
 
-// 订阅计划定义
-const plans = [
-  {
-    name: "月付",
-    price: "$35",
-    period: "monthly",
-    realPrice: 35,
-    features: []
-  },
-  {
-    name: "季付",
-    price: "$99",
-    period: "quarterly",
-    realPrice: 99,
-    popular: true,
-    features: []
-  },
-  {
-    name: "年付",
-    price: "$365",
-    period: "yearly",
-    realPrice: 365,
-    features: []
-  }
-];
 
 export default function Home() {
-  // 使用Hooks
-  const { logs, addLog, clearLogs } = useLog();
-  const { user } = useAuth();
-  
   return (
-    <SuiPriceProvider onLog={addLog}>
-      <ZkLoginProvider userId={user?.id} onLog={addLog}>
-        <HomeContent 
-          logs={logs} 
-          addLog={addLog} 
-          clearLogs={clearLogs} 
-        />
-      </ZkLoginProvider>
-    </SuiPriceProvider>
+    <LogProvider>
+      {/* <SuiPriceProvider> */}
+        <ZkLoginProvider>
+          <HomeContent />
+        </ZkLoginProvider>
+      {/* </SuiPriceProvider> */}
+    </LogProvider>
   );
 }
 
-function HomeContent({ logs, addLog, clearLogs }: { 
-  logs: string[], 
-  addLog: (message: string) => void, 
-  clearLogs: () => void 
-}) {
+function HomeContent() {
   // 使用Context
-  const { user, zkLoginAddress } = useAuth();
   const { 
     activeSubscription,
+    loadingAction,
     showSubscriptionManagement,
     setShowSubscriptionManagement,
     handleSubscribeClick,
     handleToggleAutoRenew,
-    handleCancelSubscription
+    handleCancelSubscription,
+    handleRenewSubscription,
+    plans: subscriptionPlans,
+    loading
   } = useSubscriptionContext();
   const {
     showPaymentDialog,
     setShowPaymentDialog,
     selectedPlan,
-    setSelectedPlan,
     handlePaymentConfirm
   } = usePayment();
   
-  // 使用ZkLogin - 现在是在ZkLoginProvider内部调用
-  const { handleJwtReceived } = useZkLogin();
-  
   // 使用Hooks
-  const { showRechargeDialog, setShowRechargeDialog, handleRecharge } = useRecharge();
-  const { suiPrice: currentSuiPrice, isLoadingPrice: isSuiPriceLoading } = useSuiPrice();
+  const { 
+    showDepositDialog, 
+    setShowDepositDialog, 
+  } = useDeposit();
 
-  // 检查并处理可能存在的JWT
-  useEffect(() => {
-  }, [handleJwtReceived, addLog]);
+  // 处理数据加载和空数据情况
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white flex items-center justify-center">
+        <div className="text-center p-8">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-yellow-400 border-t-transparent mx-auto mb-4"></div>
+          <p className="text-lg">正在加载订阅计划...</p>
+        </div>
+      </div>
+    );
+  }
 
-  // 修改handleRecharge函数以匹配RechargeDialog的期望
-  const handleRechargeWrapper = async (amount: string) => {
-    try {
-      await handleRecharge(amount);
-    } catch (error: any) {
-      addLog('充值失败: ' + error.message);
-      throw error;
-    }
-  };
+  if (!subscriptionPlans || subscriptionPlans.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white flex items-center justify-center">
+        <div className="text-center p-8 max-w-md">
+          <div className="text-yellow-400 text-4xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold mb-2">暂无订阅计划</h2>
+          <p className="text-gray-400">目前没有可用的订阅计划，请稍后再试。</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
         <Header 
-          onRechargeClick={() => setShowRechargeDialog(true)}
+          onRechargeClick={() => setShowDepositDialog(true)}
           onSubscriptionManagementClick={() => setShowSubscriptionManagement(true)}
         />
         
-        <LogDisplay logs={logs} onClearLogs={clearLogs} />
+        <LogDisplay />
         
         <SubscriptionPlans
-          plans={plans}
+          plans={subscriptionPlans}
           activeSubscription={activeSubscription}
+          loadingAction={loadingAction}
           onSubscribe={handleSubscribeClick}
         />
         
         {/* 充值对话框 */}
-        <RechargeDialog
-          isOpen={showRechargeDialog}
-          onClose={() => setShowRechargeDialog(false)}
-          zkLoginAddress={zkLoginAddress}
-          suiPrice={currentSuiPrice}
-          isLoadingPrice={isSuiPriceLoading}
-          onRecharge={handleRechargeWrapper}
+        <DepositDialog
+          isOpen={showDepositDialog}
+          onClose={() => setShowDepositDialog(false)}
         />
 
         {/* 订阅管理对话框 */}
@@ -134,9 +104,11 @@ function HomeContent({ logs, addLog, clearLogs }: {
           isOpen={showSubscriptionManagement}
           onClose={() => setShowSubscriptionManagement(false)}
           activeSubscription={activeSubscription}
+          loadingAction={loadingAction}
           onSubscriptionUpdate={() => {}}
           onToggleAutoRenew={handleToggleAutoRenew}
           onCancelSubscription={handleCancelSubscription}
+          onRenewSubscription={handleRenewSubscription}
         />
 
         {/* 支付对话框 */}
