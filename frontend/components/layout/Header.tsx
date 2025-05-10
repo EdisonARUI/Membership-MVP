@@ -19,6 +19,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import LotteryDialog from "../lottery/LotteryDialog";
 import { FcGoogle } from "react-icons/fc";
 import { useDeposit } from "@/contexts/DepositContext";
+import { AppStorage } from "@/utils/StorageService";
 
 /**
  * Props for Header component
@@ -49,48 +50,12 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
   
   // Use AuthContext for login logic, ZkLoginContext for state only
   const { handleLogin } = useAuth();
+  const { handleLogout } = useAuth();
   const { state } = useZkLogin();
   const { zkLoginAddress, loading } = state;
   
   const [showLotteryDialog, setShowLotteryDialog] = useState(false);
   const { showDepositDialog, setShowDepositDialog } = useDeposit();
-
-  /**
-   * Handles Google login button click, triggers AuthContext login
-   */
-  const handleGoogleLogin = async () => {
-    try {
-      addLog("Starting Google login process...");
-      await handleLogin();
-    } catch (error: any) {
-      addLog(`Google login failed: ${error.message}`);
-    }
-  };
-
-  /**
-   * Handles logout button click, clears local/session storage and logs out from Supabase
-   */
-  const handleLogout = async () => {
-    try {
-      addLog("Starting logout process...");
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('zkLogin_ephemeral');
-        localStorage.removeItem('zkLogin_address');
-        localStorage.removeItem('zkLogin_proof');
-        localStorage.removeItem('zkLogin_signature');
-        sessionStorage.removeItem('jwt_already_processed');
-        sessionStorage.removeItem('has_checked_jwt');
-        sessionStorage.removeItem('pending_jwt');
-        sessionStorage.removeItem('oauth_state');
-      }
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      addLog("Successfully logged out");
-      window.location.reload();
-    } catch (error: any) {
-      addLog(`Logout failed: ${error.message}`);
-    }
-  };
 
   /**
    * Handles lottery button click, opens the lottery dialog
@@ -184,7 +149,7 @@ export function Header({ onRechargeClick, onSubscriptionManagementClick }: Heade
           ) : (
             <>
               <button
-                onClick={handleGoogleLogin}
+                onClick={handleLogin}
                 disabled={loading}
                 className="w-full max-w-sm px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition flex items-center justify-center space-x-3"
               >
