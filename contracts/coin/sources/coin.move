@@ -1,5 +1,7 @@
+/// @title Test USDT Coin Module
+/// @notice This module implements a test USDT token with public minting capabilities
+/// @dev Uses Sui coin standard with controlled public minting
 module coin::test_usdt {
-    // 导入必要的模块
     use sui::coin::{Self, TreasuryCap};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -7,68 +9,78 @@ module coin::test_usdt {
     use sui::object::{Self, UID};
     use sui::dynamic_field as df;
 
-    // One-time witness type
+    /// One-time witness type for coin creation
     struct TEST_USDT has drop {}
 
-    // 公共铸币管理对象，包含铸币能力
+    /// Public minting authority object containing the capability to mint tokens
+    /// @param id - Unique identifier for the object
+    /// @param max_mint_amount - Maximum amount of tokens that can be minted in a single transaction per address
     struct MintAuthority has key {
         id: UID,
-        // 每个地址单次铸币的最大金额
         max_mint_amount: u64
     }
 
-    // 字段标识符，用于存储TreasuryCap
+    /// Field identifier used to store TreasuryCap in dynamic fields
     struct TreasuryCapKey has copy, drop, store {}
 
-    // 一次性初始化函数，符合Sui标准
+    /// One-time initialization function following Sui standard
+    /// @param witness - One-time witness for coin creation
+    /// @param ctx - Transaction context
     fun init(witness: TEST_USDT, ctx: &mut TxContext) {
         let (treasury_cap, metadata) = coin::create_currency<TEST_USDT>(
             witness, 
-            8,  // 代币精度
-            b"testUSDT",  // 代币名称
-            b"testUSDT",  // 代币符号
-            b"Public Mintable Test USDT",  // 代币描述
-            option::none(),      // 代币图标（可选）
+            8,  // Token decimals
+            b"testUSDT",  // Token name
+            b"testUSDT",  // Token symbol
+            b"Public Mintable Test USDT",  // Token description
+            option::none(),      // Token icon (optional)
             ctx
         );
         
-        // 创建公共铸币管理对象
+        // Create public minting authority object
         let mint_authority = MintAuthority {
             id: object::new(ctx),
-            max_mint_amount: 1000_00000000 // 1000 USDT (考虑8位精度)
+            max_mint_amount: 1000_00000000 // 1000 USDT (considering 8 decimal places)
         };
         
-        // 将TreasuryCap存储在MintAuthority的动态字段中
+        // Store TreasuryCap in MintAuthority's dynamic field
         df::add(&mut mint_authority.id, TreasuryCapKey {}, treasury_cap);
         
-        // 冻结元数据，防止修改
+        // Freeze metadata to prevent modifications
         transfer::public_freeze_object(metadata);
         
-        // 将MintAuthority设为共享对象，任何人都可以访问
+        // Share MintAuthority as a shared object, accessible to anyone
         transfer::share_object(mint_authority);
     }
 
-    // 公共铸造函数 - 任何人都可以调用
+    /// Public minting function - Can be called by anyone
+    /// @dev Mints new tokens and transfers them to the caller
+    /// @param mint_authority - Reference to the minting authority object
+    /// @param amount - Amount of tokens to mint
+    /// @param ctx - Transaction context
+    /// @notice The amount is limited by max_mint_amount to prevent abuse
     public entry fun public_mint(
-        mint_authority: &mut MintAuthority,    // 铸币管理对象
-        amount: u64,                           // 铸造数量
-        ctx: &mut TxContext                    // 交易上下文
+        mint_authority: &mut MintAuthority,    // Minting authority object
+        amount: u64,                           // Amount to mint
+        ctx: &mut TxContext                    // Transaction context
     ) {
-        // 检查铸币限额
-        assert!(amount <= mint_authority.max_mint_amount, 1); // 确保不超过单次最大铸币金额
+        // Check minting limit
+        assert!(amount <= mint_authority.max_mint_amount, 1); // Ensure amount doesn't exceed maximum single mint limit
         
-        // 获取TreasuryCap
+        // Get TreasuryCap from dynamic field
         let treasury_cap = df::borrow_mut<TreasuryCapKey, TreasuryCap<TEST_USDT>>(
             &mut mint_authority.id, TreasuryCapKey {}
         );
         
-        // 铸造代币并转移给调用者
+        // Mint tokens and transfer to caller
         let recipient = tx_context::sender(ctx);
         let coin = coin::mint(treasury_cap, amount, ctx);
         transfer::public_transfer(coin, recipient);
     }
 
-    // 获取公共铸币限制信息
+    /// Get public minting limit information
+    /// @param mint_authority - Reference to the minting authority object
+    /// @return u64 - The maximum amount that can be minted in a single transaction
     public fun get_mint_limit(mint_authority: &MintAuthority): u64 {
         mint_authority.max_mint_amount
     }
