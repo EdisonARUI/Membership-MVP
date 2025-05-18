@@ -1,7 +1,5 @@
 /docs_dev
-/pics
 /.cursor
-/pictures
 /frontend/node_modules
 /frontend/package-lock.json
 **/deploy.md
